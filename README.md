@@ -36,7 +36,7 @@ SunEnergyXT 500 Series is a custom integration for Home Assistant that allows yo
 
 ### Manual Installation
 
-1. Download the latest [release package](https://github.com/GLORYFeonix/SunEnergyXT_500_Series/releases)
+1. Download the latest [release package](https://github.com/SunEnergyXT/SunEnergyXT-500-Series/releases)
 2. Extract to `config/custom_components/` directory
 3. Ensure the directory structure is `config/custom_components/sunenergyxt/`
 4. Restart Home Assistant
