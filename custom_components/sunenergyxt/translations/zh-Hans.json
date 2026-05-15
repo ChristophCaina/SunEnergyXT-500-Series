@@ -13,6 +13,16 @@
                 "title": "发现 SunEnergyXT 设备",
                 "description": "发现设备 SN: {sn} ，IP: {host}，是否添加？",
                 "data": {}
+            },
+            "grid_sensor": {
+                "title": "电网功率传感器（可选）",
+                "description": "选择一个提供当前电网功率（单位：瓦特）的 Home Assistant 传感器。\n\n正值 = 向电网馈电（输出），负值 = 从电网取电（消耗）。\n\n配置后，每当传感器状态变化时，集成将自动写入 GS 设定值，无需手动 rest_command。\n\n此字段为可选项。留空则通过 Number 实体手动控制 GS。",
+                "data": {
+                    "grid_sensor_entity_id": "电网功率传感器"
+                },
+                "data_description": {
+                    "grid_sensor_entity_id": "提供电网功率（瓦特）的传感器（例如 SolarEdge 电表、Shelly、Tibber Pulse 等）。留空表示手动控制。"
+                }
             }
         },
         "error": {
