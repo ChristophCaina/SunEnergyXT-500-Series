@@ -13,6 +13,16 @@
                 "title": "SunEnergyXT device discovered",
                 "description": "Discovered device SN: {sn}, IP: {host}. Do you want to add it?",
                 "data": {}
+            },
+            "grid_sensor": {
+                "title": "Grid Power Sensor (optional)",
+                "description": "Select a Home Assistant sensor that provides the current grid power in Watts.\n\nPositive values = export to grid (feed-in), negative values = import from grid.\n\nWhen configured, the integration will automatically write the GS setpoint whenever the sensor state changes — no manual rest_command needed.\n\nThis field is optional. Leave blank to control GS manually via the Number entity.",
+                "data": {
+                    "grid_sensor_entity_id": "Grid Power Sensor"
+                },
+                "data_description": {
+                    "grid_sensor_entity_id": "Sensor providing grid power in Watts (e.g. SolarEdge Meter, Shelly, Tibber Pulse …). Leave empty for manual control."
+                }
             }
         },
         "error": {
