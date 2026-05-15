@@ -23,6 +23,16 @@
                 "data_description": {
                     "grid_sensor_entity_id": "Sensor providing grid power in Watts (e.g. SolarEdge Meter, Shelly, Tibber Pulse …). Leave empty for manual control."
                 }
+            },
+            "reconfigure": {
+                "title": "Change Grid Power Sensor",
+                "description": "Change the Home Assistant sensor used for automatic self-consumption control.\n\nPositive values = export to grid (feed-in), negative values = import from grid.\n\nLeave empty to disable automatic control.",
+                "data": {
+                    "grid_sensor_entity_id": "Grid Power Sensor"
+                },
+                "data_description": {
+                    "grid_sensor_entity_id": "Sensor providing grid power in Watts. Leave empty for manual control."
+                }
             }
         },
         "error": {
@@ -40,7 +50,8 @@
             "cannot_get_model": "Unable to get model. Please check device status.",
             "not_device": "The discovered device is not a SunEnergyXT device.",
             "already_configured": "This device has been added.",
-            "unknown": "An unknown error occurred."
+            "unknown": "An unknown error occurred.",
+            "reconfigure_successful": "Configuration updated successfully."
         }
     },
     "entity": {
