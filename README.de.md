@@ -21,7 +21,7 @@ Die vollstaendige Referenz der lokalen API, Beispiele fuer `MD`-Zaehlerverbindun
 - Ueberwachung von PV-Eingang, Netzanschlussleistung, Lastanschlussleistung, Batteriestand, Firmware-Versionen und weiteren Echtzeitdaten
 - Anpassung haeufig genutzter Einstellungen wie `GS`, `IS`, `SI`, `SA`, `SO` und `PT`
 - Konfiguration von lokalem Modus, `MM` Lokaler Eigenverbrauch, `MD` lokale Smart-Meter-Verbindung und dem Zeitzonenfeld `TZ`
-- **Automatische GS-Steuerung ueber beliebigen Home Assistant Sensor** – kein dedizierter Smart Meter am Geraet erforderlich
+- **Automatische Eigenverbrauchsregelung ueber beliebigen Home Assistant Sensor** – kein dedizierter Smart Meter am Geraet erforderlich
 - Neustart des Geraets direkt aus Home Assistant
 
 ## Installation
@@ -81,13 +81,28 @@ Hinweise zur Nutzung:
 - Wenn Sie die automatische Erkennung nutzen moechten, muss das Netzwerk mDNS / Zeroconf zulassen
 - Nach dem Aendern eines Steuerwerts sollte der finale Zustand durch die naechste Aktualisierung oder ein erneutes Auslesen bestaetigt werden
 
-## Automatische GS-Steuerung ueber HA-Sensor
+## Automatische Eigenverbrauchsregelung ueber HA-Sensor
 
-Die Integration unterstuetzt eine optionale, herstellerunabhaengige Steuerung des Netzleistungs-Sollwerts (`GS`) ueber einen beliebigen Home Assistant Sensor.
+Die Integration unterstuetzt eine optionale, herstellerunabhaengige Eigenverbrauchsregelung ueber einen beliebigen Home Assistant Leistungssensor.
 
-### Wofuer ist das nuetzlich?
+### Wie funktioniert das?
 
-Standardmaessig unterstuetzt der lokale Eigenverbrauchsmodus (`MM`) nur bestimmte Smart Meter direkt (Shelly Pro 3EM, EcoTracker, Tasmota/BitShake). Wer einen anderen Energiezaehler verwendet – etwa ueber **SolarEdge Modbus**, **Tibber Pulse**, **Volkszaehler** oder eine andere Integration – kann den Netzfluss-Sensor aus Home Assistant direkt verwenden. Kein zusaetzliches Geraet am Speicher noetig.
+Standardmaessig unterstuetzt der lokale Eigenverbrauchsmodus (`MM`) des Geraets nur bestimmte Smart Meter direkt (Shelly Pro 3EM, EcoTracker, Tasmota/BitShake). Wer einen anderen Energiezaehler verwendet – etwa ueber **SolarEdge Modbus**, **Tibber Pulse**, **Volkszaehler** oder eine andere Integration – kann den Netzfluss-Sensor aus Home Assistant direkt verwenden.
+
+Die Integration registriert dazu automatisch einen **lokalen HTTP-Endpunkt** in Home Assistant, der die Sensordaten im Shelly-kompatiblen Format bereitstellt. Das Geraet fragt diesen Endpunkt direkt ab und nutzt seinen **internen PID-Regler** fuer die Regelung – schnell, stabil und ohne Schwingen. Kein zusaetzliches Messgeraet am Speicher noetig.
+
+```
+HA Sensor (z.B. SolarEdge Meter)
+        ↓
+HA lokaler HTTP-Proxy
+  GET /api/sunenergyxt_proxy/{id}/status
+  → {"total_power": <Watt>}
+        ↓
+Geraet (MM=1, MD=Proxy-URL)
+  interner PID-Regler
+        ↓
+Automatische Lade-/Entladeregelung
+```
 
 ### Einrichtung
 
@@ -97,6 +112,8 @@ Im letzten Schritt des Setup-Dialogs erscheint ein optionaler Entity-Selector:
 > Waehle einen Home Assistant Sensor, der die aktuelle Netzleistung in Watt liefert.
 
 Waehlen Sie hier den Sensor, der den aktuellen Netzfluss an Ihrem Hausanschluss misst. Das Feld kann leer gelassen werden – in diesem Fall aendert sich nichts am bisherigen Verhalten.
+
+Nach der Konfiguration schreibt die Integration automatisch die `MD`-Verbindungszeichenkette und aktiviert `MM=1` auf dem Geraet. Beim Entfernen der Integration wird `MM` automatisch deaktiviert.
 
 ### Vorzeichenkonvention
 
@@ -109,19 +126,11 @@ Die Vorzeichenkonvention des gewaehlten Sensors muss mit der Geraete-API ueberei
 
 > **Hinweis:** Pruefen Sie das Vorzeichen Ihres Sensors vor der Konfiguration. Viele Integrationen (z. B. SolarEdge Modbus Multi) liefern den Netzfluss bereits in dieser Konvention.
 
-### Verhalten nach der Konfiguration
-
-- Bei jeder Zustandsaenderung des Sensors schreibt die Integration automatisch den neuen `GS`-Wert ans Geraet
-- Schwankungen unter 10 W werden ignoriert (Deadband), um unnoetige Schreibvorgaenge zu vermeiden
-- Werte werden auf 10 W gerundet (Geraete-Schrittweite)
-- Der Sensor ist optional – ohne Konfiguration kann `GS` weiterhin manuell ueber die Number-Entitaet gesetzt werden
-- Kein `rest_command` in `configuration.yaml` erforderlich
-
 ### Beispiele fuer kompatible Sensoren
 
 | Quelle | Typische Entity-ID |
 |--------|--------------------|
-| SolarEdge Modbus Multi (HACS) | `sensor.solaredge_meter_power` |
+| SolarEdge Modbus Multi (HACS) | `sensor.solaredge_i1_m1_ac_power` |
 | Shelly Pro 3EM | `sensor.shelly_pro3em_total_active_power` |
 | Tibber Pulse | `sensor.tibber_power` |
 | Volkszaehler / SML | abhaengig von der Integration |
@@ -186,7 +195,7 @@ Hinweise:
 
 | Entitaets-ID | Name | Einheit | Bereich | Schritt | Beschreibung |
 |--------------|------|---------|---------|---------|--------------|
-| `GS` | Sollwert Leistung Netzanschluss | W | `-2400` bis `2400` | `10` | Sollwert fuer die Leistung am Netzanschluss. Wird bei konfiguriertem Netzfluss-Sensor automatisch gesetzt. Die uebliche obere positive Grenze ist `800W` fuer SunEnergyXT 500 und `2400W` fuer SunEnergyXT 500 Pro |
+| `GS` | Sollwert Leistung Netzanschluss | W | `-2400` bis `2400` | `10` | Sollwert fuer die Leistung am Netzanschluss. Bei konfiguriertem Netzfluss-Sensor wird dieser Wert vom Geraet intern geregelt. |
 | `IS` | Sollwert max. Wechselrichterleistung | W | `1` bis `2400` | `10` | Maximale Wechselrichter-Ausgangsleistung. Die Obergrenze liegt bei `800W` fuer SunEnergyXT 500 und `2400W` fuer SunEnergyXT 500 Pro |
 | `SI` | System Entladegrenze | % | `1` bis `30` | `1` | Minimaler SOC fuer Entladung im On-Grid-Betrieb |
 | `SA` | System Ladegrenze | % | `70` bis `100` | `1` | Maximaler SOC fuer Ladung im On-Grid-Betrieb |
@@ -198,15 +207,15 @@ Hinweise:
 | Entitaets-ID | Name | Beschreibung |
 |--------------|------|--------------|
 | `LM` | Lokaler Modus | Schalter fuer den lokalen Modus. Wenn aktiv, priorisiert das Geraet die lokale Konfiguration |
-| `MM` | Lokaler Eigenverbrauch | Schalter fuer den Modus "Lokaler Eigenverbrauch". Vor dem Aktivieren sollte eine gueltige `MD`-Smart-Meter-Verbindung hinterlegt werden |
+| `MM` | Lokaler Eigenverbrauch | Schalter fuer den Modus "Lokaler Eigenverbrauch". Wird bei konfiguriertem Netzfluss-Sensor automatisch aktiviert. |
 | `PM` | Parallelschaltmodus des Systems | Schalter fuer den Parallelbetrieb. Nur verwenden, wenn Geraetetopologie und Firmware dies unterstuetzen |
 
 ### Text
 
 | Entitaets-ID | Name | Beschreibung |
 |--------------|------|--------------|
-| `MD` | Lokale Smart-Meter-Verbindung | JSON-Zeichenkette fuer die lokale Smart-Meter-Verbindung im Modus "Lokaler Eigenverbrauch". Es muss exakt der finale geraeteseitige Wert aus [API.md](API.md) verwendet werden. Die Einstellung wirkt direkt, ist aber kein garantiertes Ruecklesefeld |
-| `TZ` | Systemzeitzone | POSIX-Zeitzonenstring. Fuer China kann z. B. `CST-8` verwendet werden; fuer Deutschland mit Sommerzeit z. B. `CET-1CEST,M3.5.0,M10.5.0/3`. Die Einstellung wirkt direkt, ist aber kein garantiertes Ruecklesefeld |
+| `MD` | Lokale Smart-Meter-Verbindung | JSON-Zeichenkette fuer die lokale Smart-Meter-Verbindung. Wird bei konfiguriertem Netzfluss-Sensor automatisch gesetzt. |
+| `TZ` | Systemzeitzone | POSIX-Zeitzonenstring. Fuer China kann z. B. `CST-8` verwendet werden; fuer Deutschland mit Sommerzeit z. B. `CET-1CEST,M3.5.0,M10.5.0/3`. |
 
 ### Button
 
@@ -229,14 +238,14 @@ Hinweise:
 - Pruefen Sie, ob `http://geraete-ip/read` direkt erreichbar ist
 - Bestaetigen Sie nach einer Aenderung den finalen Zustand stets durch erneutes Auslesen
 
-### GS wird nicht automatisch geschrieben
+### Eigenverbrauchsregelung funktioniert nicht (MS = Nicht gebunden)
 
-- Pruefen Sie, ob der konfigurierte Sensor einen numerischen Wert in Watt liefert
-- Pruefen Sie, ob der Sensor den Status `unavailable` oder `unknown` hat
-- Kontrollieren Sie das Vorzeichen: positiv = Einspeisung, negativ = Bezug
+- Pruefen Sie ob der konfigurierte Sensor einen gueltigen numerischen Wert in Watt liefert
+- Pruefen Sie ob Home Assistant vom Geraet aus erreichbar ist: `curl http://ha-ip:8123/api/sunenergyxt_proxy/{entry_id}/status`
+- Stellen Sie sicher dass `LM` (Lokaler Modus) aktiviert ist
 - Pruefen Sie in den HA-Logs ob Fehlermeldungen vorliegen (`Logger: custom_components.sunenergyxt`)
 
-### Lokaler Eigenverbrauch funktioniert nicht
+### Lokaler Eigenverbrauch funktioniert nicht (ohne HA-Sensor)
 
 - Stellen Sie sicher, dass `MD` exakt dem Zaehlerbeispiel in [API.md](API.md) entspricht
 - Stellen Sie sicher, dass `MM` aktiviert ist
