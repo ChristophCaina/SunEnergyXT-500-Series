@@ -21,6 +21,7 @@ Die vollstaendige Referenz der lokalen API, Beispiele fuer `MD`-Zaehlerverbindun
 - Ueberwachung von PV-Eingang, Netzanschlussleistung, Lastanschlussleistung, Batteriestand, Firmware-Versionen und weiteren Echtzeitdaten
 - Anpassung haeufig genutzter Einstellungen wie `GS`, `IS`, `SI`, `SA`, `SO` und `PT`
 - Konfiguration von lokalem Modus, `MM` Lokaler Eigenverbrauch, `MD` lokale Smart-Meter-Verbindung und dem Zeitzonenfeld `TZ`
+- **Automatische GS-Steuerung ueber beliebigen Home Assistant Sensor** – kein dedizierter Smart Meter am Geraet erforderlich
 - Neustart des Geraets direkt aus Home Assistant
 
 ## Installation
@@ -72,12 +73,59 @@ custom_components
    - Wenn das Geraet automatisch gefunden wird, bestaetigen Sie einfach den Fund
    - Wenn das Geraet nicht automatisch gefunden wird, geben Sie die IP-Adresse manuell ein
 5. Die Integration liest SN und Modell automatisch aus. Eine manuelle Eingabe der SN ist nicht noetig
+6. **Optional:** Waehlen Sie einen Home Assistant Sensor als Netzfluss-Quelle (siehe naechsten Abschnitt)
 
 Hinweise zur Nutzung:
 
 - Home Assistant und das Geraet muessen sich im selben lokalen Netzwerk befinden
 - Wenn Sie die automatische Erkennung nutzen moechten, muss das Netzwerk mDNS / Zeroconf zulassen
 - Nach dem Aendern eines Steuerwerts sollte der finale Zustand durch die naechste Aktualisierung oder ein erneutes Auslesen bestaetigt werden
+
+## Automatische GS-Steuerung ueber HA-Sensor
+
+Die Integration unterstuetzt eine optionale, herstellerunabhaengige Steuerung des Netzleistungs-Sollwerts (`GS`) ueber einen beliebigen Home Assistant Sensor.
+
+### Wofuer ist das nuetzlich?
+
+Standardmaessig unterstuetzt der lokale Eigenverbrauchsmodus (`MM`) nur bestimmte Smart Meter direkt (Shelly Pro 3EM, EcoTracker, Tasmota/BitShake). Wer einen anderen Energiezaehler verwendet – etwa ueber **SolarEdge Modbus**, **Tibber Pulse**, **Volkszaehler** oder eine andere Integration – kann den Netzfluss-Sensor aus Home Assistant direkt verwenden. Kein zusaetzliches Geraet am Speicher noetig.
+
+### Einrichtung
+
+Im letzten Schritt des Setup-Dialogs erscheint ein optionaler Entity-Selector:
+
+> **Netzfluss-Sensor (optional)**
+> Waehle einen Home Assistant Sensor, der die aktuelle Netzleistung in Watt liefert.
+
+Waehlen Sie hier den Sensor, der den aktuellen Netzfluss an Ihrem Hausanschluss misst. Das Feld kann leer gelassen werden – in diesem Fall aendert sich nichts am bisherigen Verhalten.
+
+### Vorzeichenkonvention
+
+Die Vorzeichenkonvention des gewaehlten Sensors muss mit der Geraete-API uebereinstimmen:
+
+| Wert | Bedeutung |
+|------|-----------|
+| **Positiv** | Einspeisung ins Netz (Ueberschuss) |
+| **Negativ** | Bezug aus dem Netz |
+
+> **Hinweis:** Pruefen Sie das Vorzeichen Ihres Sensors vor der Konfiguration. Viele Integrationen (z. B. SolarEdge Modbus Multi) liefern den Netzfluss bereits in dieser Konvention.
+
+### Verhalten nach der Konfiguration
+
+- Bei jeder Zustandsaenderung des Sensors schreibt die Integration automatisch den neuen `GS`-Wert ans Geraet
+- Schwankungen unter 10 W werden ignoriert (Deadband), um unnoetige Schreibvorgaenge zu vermeiden
+- Werte werden auf 10 W gerundet (Geraete-Schrittweite)
+- Der Sensor ist optional – ohne Konfiguration kann `GS` weiterhin manuell ueber die Number-Entitaet gesetzt werden
+- Kein `rest_command` in `configuration.yaml` erforderlich
+
+### Beispiele fuer kompatible Sensoren
+
+| Quelle | Typische Entity-ID |
+|--------|--------------------|
+| SolarEdge Modbus Multi (HACS) | `sensor.solaredge_meter_power` |
+| Shelly Pro 3EM | `sensor.shelly_pro3em_total_active_power` |
+| Tibber Pulse | `sensor.tibber_power` |
+| Volkszaehler / SML | abhaengig von der Integration |
+| ESPHome (IR-Lesekopf) | abhaengig von der Konfiguration |
 
 ## Entitaetsbeschreibung
 
@@ -137,8 +185,8 @@ Hinweise:
 ### Number
 
 | Entitaets-ID | Name | Einheit | Bereich | Schritt | Beschreibung |
-|--------------|------|---------|---------|----------|--------------|
-| `GS` | Sollwert Leistung Netzanschluss | W | `-2400` bis `2400` | `10` | Sollwert fuer die Leistung am Netzanschluss. Positive Werte bedeuten in der Regel Einspeisung, negative Werte in der Regel Netzbezug oder Netzladen. Die uebliche obere positive Grenze ist `800W` fuer SunEnergyXT 500 und `2400W` fuer SunEnergyXT 500 Pro |
+|--------------|------|---------|---------|---------|--------------|
+| `GS` | Sollwert Leistung Netzanschluss | W | `-2400` bis `2400` | `10` | Sollwert fuer die Leistung am Netzanschluss. Wird bei konfiguriertem Netzfluss-Sensor automatisch gesetzt. Die uebliche obere positive Grenze ist `800W` fuer SunEnergyXT 500 und `2400W` fuer SunEnergyXT 500 Pro |
 | `IS` | Sollwert max. Wechselrichterleistung | W | `1` bis `2400` | `10` | Maximale Wechselrichter-Ausgangsleistung. Die Obergrenze liegt bei `800W` fuer SunEnergyXT 500 und `2400W` fuer SunEnergyXT 500 Pro |
 | `SI` | System Entladegrenze | % | `1` bis `30` | `1` | Minimaler SOC fuer Entladung im On-Grid-Betrieb |
 | `SA` | System Ladegrenze | % | `70` bis `100` | `1` | Maximaler SOC fuer Ladung im On-Grid-Betrieb |
@@ -180,6 +228,13 @@ Hinweise:
 - Pruefen Sie, ob die Netzwerkverbindung des Geraets stabil ist
 - Pruefen Sie, ob `http://geraete-ip/read` direkt erreichbar ist
 - Bestaetigen Sie nach einer Aenderung den finalen Zustand stets durch erneutes Auslesen
+
+### GS wird nicht automatisch geschrieben
+
+- Pruefen Sie, ob der konfigurierte Sensor einen numerischen Wert in Watt liefert
+- Pruefen Sie, ob der Sensor den Status `unavailable` oder `unknown` hat
+- Kontrollieren Sie das Vorzeichen: positiv = Einspeisung, negativ = Bezug
+- Pruefen Sie in den HA-Logs ob Fehlermeldungen vorliegen (`Logger: custom_components.sunenergyxt`)
 
 ### Lokaler Eigenverbrauch funktioniert nicht
 
