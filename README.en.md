@@ -21,6 +21,7 @@ For the complete local API field reference, `MD` meter connection string example
 - Monitor PV input, grid port power, load port power, battery level, firmware versions, and other real-time data
 - Adjust common settings such as `GS`, `IS`, `SI`, `SA`, `SO`, and `PT`
 - Configure Local Mode, `MM` Local Self-Consumption Mode, `MD` local meter connection settings, and the `TZ` timezone field
+- **Automatic GS control via any Home Assistant sensor** — no dedicated smart meter at the device required
 - Restart the device from Home Assistant
 
 ## Installation
@@ -72,12 +73,59 @@ custom_components
    - If the device is discovered automatically, confirm the discovered device
    - If the device is not discovered automatically, enter the device IP address manually
 5. The integration reads the device SN and model automatically. You do not need to enter the SN manually
+6. **Optional:** Select a Home Assistant sensor as the grid power source (see next section)
 
 Usage notes:
 
 - Home Assistant and the device must be on the same local network
 - If you rely on automatic discovery, make sure the network allows mDNS / Zeroconf traffic
 - After changing a control item, wait for the next polling cycle or read the status again to confirm the final value
+
+## Automatic GS Control via HA Sensor
+
+The integration supports optional, hardware-independent control of the grid power setpoint (`GS`) using any Home Assistant power sensor.
+
+### Why is this useful?
+
+By default, the device's local self-consumption mode (`MM`) only supports specific meters directly (Shelly Pro 3EM, EcoTracker, Tasmota/BitShake). Users with other energy meters — such as **SolarEdge Modbus**, **Tibber Pulse**, **Volkszähler**, or any other integration — can use their existing HA sensor directly. No additional hardware at the storage device is required.
+
+### Setup
+
+In the final step of the setup dialog, an optional entity selector appears:
+
+> **Grid Power Sensor (optional)**
+> Select a Home Assistant sensor that provides the current grid power in Watts.
+
+Select the sensor that measures the current grid power at your home connection point. The field can be left empty — in that case the behaviour is unchanged from the original.
+
+### Sign Convention
+
+The sign convention of the selected sensor must match the device API:
+
+| Value | Meaning |
+|-------|---------|
+| **Positive** | Export to grid (feed-in / surplus) |
+| **Negative** | Import from grid (consumption) |
+
+> **Note:** Check the sign of your sensor before configuring. Many integrations (e.g. SolarEdge Modbus Multi) already deliver grid power in this convention.
+
+### Behaviour after configuration
+
+- On every state change of the sensor, the integration automatically writes the new `GS` value to the device
+- Fluctuations below 10 W are ignored (deadband) to prevent unnecessary writes
+- Values are rounded to 10 W (device step size)
+- The sensor is optional — without configuration, `GS` can still be set manually via the Number entity
+- No `rest_command` in `configuration.yaml` required
+
+### Compatible sensor examples
+
+| Source | Typical entity ID |
+|--------|-------------------|
+| SolarEdge Modbus Multi (HACS) | `sensor.solaredge_meter_power` |
+| Shelly Pro 3EM | `sensor.shelly_pro3em_total_active_power` |
+| Tibber Pulse | `sensor.tibber_power` |
+| Volkszähler / SML | depends on integration |
+| ESPHome (IR reader) | depends on configuration |
 
 ## Entity Description
 
@@ -138,7 +186,7 @@ Notes:
 
 | Entity ID | Name | Unit | Range | Step | Description |
 |-----------|------|------|-------|------|-------------|
-| `GS` | System Grid Port Power Setpoint | W | `-2400` to `2400` | `10` | Grid port power setpoint. A positive value usually means export/feed-in; a negative value usually means grid import or grid charging. The common positive upper limit is `800W` for 500 Standard and `2400W` for 500 Pro |
+| `GS` | System Grid Port Power Setpoint | W | `-2400` to `2400` | `10` | Grid port power setpoint. Written automatically when a grid sensor is configured. The common positive upper limit is `800W` for 500 Standard and `2400W` for 500 Pro |
 | `IS` | System Max Inverter Power Setpoint | W | `1` to `2400` | `10` | Maximum inverter output power. The upper limit is `800W` for 500 Standard and `2400W` for 500 Pro |
 | `SI` | System Min Discharge SOC | % | `1` to `30` | `1` | Minimum SOC allowed for discharge in on-grid scenarios |
 | `SA` | System Max Charge SOC | % | `70` to `100` | `1` | Maximum SOC allowed for charge in on-grid scenarios |
@@ -180,6 +228,13 @@ Notes:
 - Check whether the device network connection is stable
 - Check whether `http://device-ip/read` is reachable directly
 - After changing a control item, confirm the final result by reading the device state again
+
+### GS Is Not Written Automatically
+
+- Check that the configured sensor provides a numeric value in Watts
+- Check whether the sensor state is `unavailable` or `unknown`
+- Verify the sign convention: positive = feed-in, negative = import
+- Check the HA logs for errors from the integration (`Logger: custom_components.sunenergyxt`)
 
 ### Local Self-Consumption Mode Does Not Work
 
