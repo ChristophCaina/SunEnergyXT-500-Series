@@ -8,7 +8,7 @@ Classes:
 - SunlitSwitch: Represents a switch entity for controlling SunEnergyXT device modes
 
 Constants:
-- SWITCH_META: Metadata configuration for switch entities, including device classes
+- SWITCH_META: Metadata configuration for switch entities
 """
 
 import logging
@@ -16,7 +16,7 @@ from http import HTTPStatus
 from typing import Any
 
 import async_timeout
-from homeassistant.components.switch import SwitchDeviceClass, SwitchEntity
+from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -31,15 +31,12 @@ _LOGGER = logging.getLogger(__name__)
 
 SWITCH_META: dict[str, dict[str, Any]] = {
     "LM": {
-        "device_class": SwitchDeviceClass.OUTLET,
         "icon": "mdi:lan",
     },
     "MM": {
-        "device_class": SwitchDeviceClass.OUTLET,
         "icon": "mdi:meter-electric-outline",
     },
     "PM": {
-        "device_class": SwitchDeviceClass.OUTLET,
         "icon": "mdi:link-variant",
     },
 }
@@ -140,11 +137,6 @@ class SunlitSwitch(CoordinatorEntity[SunlitDataUpdateCoordinator], SwitchEntity)
         self._attr_unique_id = f"{DOMAIN}_{entry_id}_{key}"
         self._attr_translation_key = key.lower()
         self._attr_device_info = device_info
-        self._attr_is_on = True
-
-        device_class = meta.get("device_class")
-        if device_class:
-            self._attr_device_class = device_class
 
         icon = meta.get("icon")
         if icon:
@@ -163,23 +155,11 @@ class SunlitSwitch(CoordinatorEntity[SunlitDataUpdateCoordinator], SwitchEntity)
         return bool(int(raw)) if raw is not None else False
 
     async def async_turn_on(self, **kwargs: dict[str, Any]) -> None:  # noqa: ARG002
-        """
-        Turn the switch on.
-
-        Args:
-            **kwargs: Additional keyword arguments
-
-        """
+        """Turn the switch on."""
         await self._async_write_switch(is_on=True)
 
     async def async_turn_off(self, **kwargs: dict[str, Any]) -> None:  # noqa: ARG002
-        """
-        Turn the switch off.
-
-        Args:
-            **kwargs: Additional keyword arguments
-
-        """
+        """Turn the switch off."""
         await self._async_write_switch(is_on=False)
 
     async def _async_write_switch(self, is_on: bool) -> None:  # noqa: FBT001
