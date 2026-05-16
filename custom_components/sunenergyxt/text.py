@@ -16,13 +16,11 @@ from http import HTTPStatus
 from typing import Any
 
 import async_timeout
-from homeassistant.components.text import (
-    TextEntity,
-)
+from homeassistant.components.text import TextEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.entity import DeviceInfo, EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -33,9 +31,11 @@ _LOGGER = logging.getLogger(__name__)
 
 TEXT_META: dict[str, dict[str, Any]] = {
     "MD": {
+        "entity_category": EntityCategory.CONFIG,
         "icon": "mdi:code-json",
     },
     "TZ": {
+        "entity_category": EntityCategory.CONFIG,
         "icon": "mdi:map-clock-outline",
     },
 }
@@ -137,6 +137,10 @@ class SunlitText(CoordinatorEntity[SunlitDataUpdateCoordinator], TextEntity):
         self._attr_translation_key = key.lower()
         self._attr_device_info = device_info
 
+        entity_category = meta.get("entity_category")
+        if entity_category is not None:
+            self._attr_entity_category = entity_category
+
         icon = meta.get("icon")
         if icon:
             self._attr_icon = icon
@@ -161,9 +165,9 @@ class SunlitText(CoordinatorEntity[SunlitDataUpdateCoordinator], TextEntity):
             value: New text value to set
 
         """
-        await self._async_write_switch(value)
+        await self._async_write_text(value)
 
-    async def _async_write_switch(self, value: str) -> None:
+    async def _async_write_text(self, value: str) -> None:
         """
         Write the text value to the device.
 
@@ -192,7 +196,7 @@ class SunlitText(CoordinatorEntity[SunlitDataUpdateCoordinator], TextEntity):
                     msg = f"HTTP {resp.status}: {text}"
                     raise RuntimeError(msg)
         except Exception as err:
-            _LOGGER.exception("Error writing switch %s: %s", self._key, err)
+            _LOGGER.exception("Error writing text %s: %s", self._key, err)
             raise
 
         if isinstance(self.coordinator.data, dict):
