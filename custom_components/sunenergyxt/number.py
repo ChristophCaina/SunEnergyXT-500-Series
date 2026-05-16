@@ -17,8 +17,9 @@ from http import HTTPStatus
 from typing import Any
 
 import async_timeout
-from homeassistant.components.number import NumberEntity, NumberMode
+from homeassistant.components.number import NumberDeviceClass, NumberEntity, NumberMode
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import PERCENTAGE, UnitOfPower, UnitOfTime
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.entity import DeviceInfo
@@ -35,42 +36,45 @@ NUMBER_META: dict[str, dict[str, Any]] = {
         "min_value": -2400,
         "max_value": 2400,
         "step": 10,
-        "unit": "W",
+        "unit": UnitOfPower.WATT,
+        "device_class": NumberDeviceClass.POWER,
         "icon": "mdi:transmission-tower",
     },
     "IS": {
         "min_value": 1,
         "max_value": 2400,
         "step": 10,
-        "unit": "W",
+        "unit": UnitOfPower.WATT,
+        "device_class": NumberDeviceClass.POWER,
         "icon": "mdi:flash",
     },
     "SI": {
         "min_value": 1,
         "max_value": 30,
         "step": 1,
-        "unit": "%",
+        "unit": PERCENTAGE,
         "icon": "mdi:battery-low",
     },
     "SA": {
         "min_value": 70,
         "max_value": 100,
         "step": 1,
-        "unit": "%",
+        "unit": PERCENTAGE,
         "icon": "mdi:battery-high",
     },
     "SO": {
         "min_value": 1,
         "max_value": 30,
         "step": 1,
-        "unit": "%",
+        "unit": PERCENTAGE,
         "icon": "mdi:battery-arrow-down-outline",
     },
     "PT": {
         "min_value": 30,
         "max_value": 1440,
         "step": 1,
-        "unit": "min",
+        "unit": UnitOfTime.MINUTES,
+        "device_class": NumberDeviceClass.DURATION,
         "icon": "mdi:timer-outline",
     },
 }
@@ -177,34 +181,38 @@ class SunlitNumber(CoordinatorEntity[SunlitDataUpdateCoordinator], NumberEntity)
         self._attr_translation_key = key.lower()
         self._attr_device_info = device_info
 
+        # Use is not None to correctly handle 0 and negative min values
         min_value = meta.get("min_value")
-        if min_value:
+        if min_value is not None:
             self._attr_native_min_value = min_value
 
         max_value = meta.get("max_value")
-        if max_value:
+        if max_value is not None:
             self._attr_native_max_value = max_value
 
-        if device_info["model"] == "SunEnergyXT 500":
-            if self._key == "GS":
-                self._attr_native_max_value = 800
-            if self._key == "IS":
+        # Cap GS and IS for SunEnergyXT 500 (non-Pro) model
+        if model == "SunEnergyXT500":
+            if self._key in ("GS", "IS"):
                 self._attr_native_max_value = 800
 
         step = meta.get("step")
-        if step:
+        if step is not None:
             self._attr_native_step = step
 
         unit = meta.get("unit")
         if unit:
             self._attr_native_unit_of_measurement = unit
 
+        device_class = meta.get("device_class")
+        if device_class:
+            self._attr_device_class = device_class
+
         icon = meta.get("icon")
         if icon:
             self._attr_icon = icon
 
     @property
-    def native_value(self) -> float:
+    def native_value(self) -> float | None:
         """
         Get the current value of the number entity.
 
@@ -214,13 +222,13 @@ class SunlitNumber(CoordinatorEntity[SunlitDataUpdateCoordinator], NumberEntity)
         """
         raw = self.coordinator.data.get(self._key)
         if raw is None:
-            _LOGGER.warning("None value from device")
+            _LOGGER.warning("None value from device for %s", self._key)
             return None
 
         try:
             return float(raw)
         except (TypeError, ValueError):
-            _LOGGER.warning("Invalid value from device: %s", raw)
+            _LOGGER.warning("Invalid value from device for %s: %s", self._key, raw)
             return None
 
     async def async_set_native_value(self, value: float) -> None:
@@ -252,7 +260,7 @@ class SunlitNumber(CoordinatorEntity[SunlitDataUpdateCoordinator], NumberEntity)
                     msg = f"HTTP {resp.status}: {text}"
                     raise RuntimeError(msg)
         except Exception as err:
-            _LOGGER.exception(err)
+            _LOGGER.exception("Error writing number %s: %s", self._key, err)
             raise
 
         if isinstance(self.coordinator.data, dict):
