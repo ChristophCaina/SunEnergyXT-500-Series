@@ -192,6 +192,51 @@
                     "1": "Online",
                     "2": "Offline"
                 }
+            },
+            "pb": {
+                "name": "Batterieleistung"
+            },
+            "pd": {
+                "name": "Heutige PV-Energie"
+            },
+            "bn": {
+                "name": "Gesamtanzahl Batteriepacks"
+            },
+            "wt": {
+                "name": "WLAN-Netzwerkstatus"
+            },
+            "uo": {
+                "name": "UPS-Modus"
+            },
+            "up": {
+                "name": "UPS PV-Bypass-Leistung"
+            },
+            "ug": {
+                "name": "UPS Netzladeleistung"
+            },
+            "fp": {
+                "name": "Max. PV-Bypass-Ausgangsleistung"
+            },
+            "tf": {
+                "name": "System-Fehler-Bitmask"
+            },
+            "ef": {
+                "name": "EMS-Fehler-Bitmask"
+            },
+            "df1": {
+                "name": "DC-Fehler-Bitmask 1"
+            },
+            "df2": {
+                "name": "DC-Fehler-Bitmask 2"
+            },
+            "af1": {
+                "name": "AC-Fehler-Bitmask 1"
+            },
+            "af2": {
+                "name": "AC-Fehler-Bitmask 2"
+            },
+            "bf": {
+                "name": "BMS-Fehler-Bitmask"
             }
         },
         "number": {
@@ -212,6 +257,15 @@
             },
             "pt": {
                 "name": "Einstellung der automatischen Abschaltzeit"
+            },
+            "up": {
+                "name": "UPS PV-Bypass-Leistung"
+            },
+            "ug": {
+                "name": "UPS Netzladeleistung"
+            },
+            "fp": {
+                "name": "Max. PV-Bypass-Ausgangsleistung"
             }
         },
         "button": {
@@ -228,6 +282,9 @@
             },
             "pm": {
                 "name": "Parallelschaltmodus des Systems"
+            },
+            "uo": {
+                "name": "UPS-Modus"
             }
         },
         "text": {
