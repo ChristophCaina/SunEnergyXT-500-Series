@@ -12,3 +12,5 @@ Constants:
 DOMAIN = "sunenergyxt"
 HOST_PREFIX = "SunEnergyXT_AIO_"
 HOST_SUFFIX = ".local"
+
+CONF_GRID_SENSOR = "grid_sensor_entity_id"

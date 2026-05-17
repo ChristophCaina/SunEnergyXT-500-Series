@@ -21,6 +21,7 @@ For the complete local API field reference, `MD` meter connection string example
 - Monitor PV input, grid port power, load port power, battery level, firmware versions, and other real-time data
 - Adjust common settings such as `GS`, `IS`, `SI`, `SA`, `SO`, and `PT`
 - Configure Local Mode, `MM` Local Self-Consumption Mode, `MD` local meter connection settings, and the `TZ` timezone field
+- **Automatic self-consumption control via any Home Assistant sensor** — no dedicated smart meter at the device required
 - Restart the device from Home Assistant
 
 ## Installation
@@ -72,12 +73,68 @@ custom_components
    - If the device is discovered automatically, confirm the discovered device
    - If the device is not discovered automatically, enter the device IP address manually
 5. The integration reads the device SN and model automatically. You do not need to enter the SN manually
+6. **Optional:** Select a Home Assistant sensor as the grid power source (see next section)
 
 Usage notes:
 
 - Home Assistant and the device must be on the same local network
 - If you rely on automatic discovery, make sure the network allows mDNS / Zeroconf traffic
 - After changing a control item, wait for the next polling cycle or read the status again to confirm the final value
+
+## Automatic Self-Consumption Control via HA Sensor
+
+The integration supports optional, hardware-independent self-consumption control using any Home Assistant power sensor.
+
+### How does it work?
+
+By default, the device's local self-consumption mode (`MM`) only supports specific meters directly (Shelly Pro 3EM, EcoTracker, Tasmota/BitShake). Users with other energy meters — such as **SolarEdge Modbus**, **Tibber Pulse**, **Volkszähler**, or any other integration — can use their existing HA sensor directly.
+
+The integration automatically registers a **local HTTP endpoint** in Home Assistant that exposes the sensor value in Shelly-compatible JSON format. The device polls this endpoint directly and uses its **internal PID controller** for regulation — fast, stable, no oscillation. No additional hardware at the storage device required.
+
+```
+HA Sensor (e.g. SolarEdge Meter)
+        ↓
+HA local HTTP proxy
+  GET /api/sunenergyxt_proxy/{id}/status
+  → {"total_power": <watts>}
+        ↓
+Device (MM=1, MD=proxy URL)
+  internal PID controller
+        ↓
+Automatic charge/discharge control
+```
+
+### Setup
+
+In the final step of the setup dialog, an optional entity selector appears:
+
+> **Grid Power Sensor (optional)**
+> Select a Home Assistant sensor that provides the current grid power in Watts.
+
+Select the sensor that measures the current grid power at your home connection point. The field can be left empty — in that case the behaviour is unchanged.
+
+After configuration, the integration automatically writes the `MD` connection string and activates `MM=1` on the device. When the integration is removed, `MM` is automatically disabled.
+
+### Sign Convention
+
+The sign convention of the selected sensor must match the device API:
+
+| Value | Meaning |
+|-------|---------|
+| **Positive** | Export to grid (feed-in / surplus) |
+| **Negative** | Import from grid (consumption) |
+
+> **Note:** Check the sign of your sensor before configuring. Many integrations (e.g. SolarEdge Modbus Multi) already deliver grid power in this convention.
+
+### Compatible sensor examples
+
+| Source | Typical entity ID |
+|--------|-------------------|
+| SolarEdge Modbus Multi (HACS) | `sensor.solaredge_i1_m1_ac_power` |
+| Shelly Pro 3EM | `sensor.shelly_pro3em_total_active_power` |
+| Tibber Pulse | `sensor.tibber_power` |
+| Volkszähler / SML | depends on integration |
+| ESPHome (IR reader) | depends on configuration |
 
 ## Entity Description
 
@@ -131,6 +188,17 @@ Notes:
 | `BS3` | Firmware Version (BMS 3) | - | Expansion storage 3 BMS firmware version |
 | `BS4` | Firmware Version (BMS 4) | - | Expansion storage 4 BMS firmware version |
 | `BS5` | Firmware Version (BMS 5) | - | Expansion storage 5 BMS firmware version |
+| `PB` | Battery Power | W | Current battery power. Positive = charging, negative = discharging |
+| `PD` | Today's PV Energy | kWh | Today's total PV energy generated. Energy Dashboard compatible |
+| `BN` | Total Battery Pack Count | - | Total number of connected battery packs |
+| `WT` | Wi-Fi Network Status | - | Device network status code |
+| `TF` | System Error Bitmask | - | Error bitmask for system prompt events |
+| `EF` | EMS Error Bitmask | - | Error bitmask for EMS events |
+| `DF1` | DC Error Bitmask 1 | - | Error bitmask for DC events 1 |
+| `DF2` | DC Error Bitmask 2 | - | Error bitmask for DC events 2 |
+| `AF1` | AC Error Bitmask 1 | - | Error bitmask for AC events 1 |
+| `AF2` | AC Error Bitmask 2 | - | Error bitmask for AC events 2 |
+| `BF` | BMS Error Bitmask | - | Error bitmask for BMS events |
 | `SN` | System Host SN | - | Device serial number |
 | `MS` | Meter Status | - | Local meter connection status. Common values: `0 = Unbound`, `1 = Online`, `2 = Offline`; some firmware versions may also report `3 = Requesting IP` |
 
@@ -138,11 +206,14 @@ Notes:
 
 | Entity ID | Name | Unit | Range | Step | Description |
 |-----------|------|------|-------|------|-------------|
-| `GS` | System Grid Port Power Setpoint | W | `-2400` to `2400` | `10` | Grid port power setpoint. A positive value usually means export/feed-in; a negative value usually means grid import or grid charging. The common positive upper limit is `800W` for 500 Standard and `2400W` for 500 Pro |
+| `GS` | System Grid Port Power Setpoint | W | `-2400` to `2400` | `10` | Grid port power setpoint. When a grid sensor is configured, this value is regulated by the device internally. |
 | `IS` | System Max Inverter Power Setpoint | W | `1` to `2400` | `10` | Maximum inverter output power. The upper limit is `800W` for 500 Standard and `2400W` for 500 Pro |
 | `SI` | System Min Discharge SOC | % | `1` to `30` | `1` | Minimum SOC allowed for discharge in on-grid scenarios |
 | `SA` | System Max Charge SOC | % | `70` to `100` | `1` | Maximum SOC allowed for charge in on-grid scenarios |
 | `SO` | System Load Port Discharge Limit SOC | % | `1` to `30` | `1` | Minimum SOC allowed for discharge in off-grid / load port scenarios |
+| `UP` | UPS PV Bypass Power | W | `20` to `2400` | `10` | PV bypass power in UPS mode after full charge |
+| `UG` | UPS Grid Charge Power | W | `0` to `2400` | `10` | Grid charge power in UPS mode. 0 = no grid charging |
+| `FP` | Max PV Bypass Output Power | W | `20` to `2400` | `10` | Maximum PV bypass output power after full battery charge |
 | `PT` | System Auto-Shutdown Time Setting | min | `30` to `1440` | `1` | Auto-shutdown time |
 
 ### Switch
@@ -150,15 +221,16 @@ Notes:
 | Entity ID | Name | Description |
 |-----------|------|-------------|
 | `LM` | Local mode | Local mode switch. When enabled, the device prioritizes local-side configuration |
-| `MM` | Local Self-Consumption Mode | Local self-consumption mode switch. Prepare a valid `MD` local meter connection setting before enabling it |
+| `MM` | Local Self-Consumption Mode | Local self-consumption mode switch. Automatically activated when a grid sensor is configured. |
+| `UO` | UPS Mode | UPS mode switch. When enabled, many non-UPS-related settings may have no effect |
 | `PM` | System Parallel Mode | Parallel mode switch. Use only when the device topology and firmware support it |
 
 ### Text
 
 | Entity ID | Name | Description |
 |-----------|------|-------------|
-| `MD` | Local Meter Connection Settings | Local meter connection JSON string for Local Self-Consumption Mode. Fill in the exact final device-side value shown in [API.md](API.md). It takes effect directly, but should not be used as a guaranteed readback field |
-| `TZ` | System Time Zone | POSIX timezone string. For example, China can use `CST-8`; Germany with DST can use `CET-1CEST,M3.5.0,M10.5.0/3`. It takes effect directly, but should not be used as a guaranteed readback field |
+| `MD` | Local Meter Connection Settings | Local meter connection JSON string for Local Self-Consumption Mode. When a grid sensor is configured, this field is set automatically. For manual configuration, fill in the exact final device-side value shown in [API.md](API.md). It takes effect directly, but should not be used as a guaranteed readback field |
+| `TZ` | System Time Zone | POSIX timezone string. For example, China can use `CST-8`; Germany with DST can use `CET-1CEST,M3.5.0,M10.5.0/3`. |
 
 ### Button
 
@@ -181,7 +253,14 @@ Notes:
 - Check whether `http://device-ip/read` is reachable directly
 - After changing a control item, confirm the final result by reading the device state again
 
-### Local Self-Consumption Mode Does Not Work
+### Self-Consumption Control Not Working (MS = Unbound)
+
+- Check that the configured sensor provides a valid numeric value in Watts
+- Verify that Home Assistant is reachable from the device: `curl http://ha-ip:8123/api/sunenergyxt_proxy/{entry_id}/status`
+- Make sure `LM` (Local Mode) is enabled
+- Check the HA logs for errors from the integration (`Logger: custom_components.sunenergyxt`)
+
+### Local Self-Consumption Mode Does Not Work (without HA sensor)
 
 - Make sure `MD` follows the exact meter-type example shown in [API.md](API.md)
 - Make sure `MM` is enabled

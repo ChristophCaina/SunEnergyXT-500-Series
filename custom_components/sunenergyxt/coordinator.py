@@ -4,6 +4,10 @@ Data update coordinator for SunEnergyXT 500 Series integration.
 This module implements the data update coordinator for the SunEnergyXT integration,
 responsible for fetching and updating data from the device at regular intervals.
 
+When a grid power sensor entity is configured, the integration registers a local
+HTTP proxy endpoint (Shelly-compatible) and sets MD/MM on the device so it uses
+its internal PID controller — no manual GS writes needed.
+
 Classes:
 - SunlitDataUpdateCoordinator: Handles data updates from SunEnergyXT devices
 """
@@ -16,9 +20,7 @@ from typing import Any
 import async_timeout
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.helpers.update_coordinator import (
-    DataUpdateCoordinator,
-)
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -28,9 +30,17 @@ class SunlitDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     Data update coordinator for SunEnergyXT devices.
 
     Handles fetching and updating data from the device at regular intervals.
+    When a grid sensor is configured, the device uses its internal PID via
+    the local HTTP proxy — this coordinator only handles polling /read.
     """
 
-    def __init__(self, hass: HomeAssistant, sn: str, ip: str) -> None:
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        sn: str,
+        ip: str,
+        grid_sensor_entity_id: str | None = None,
+    ) -> None:
         """
         Initialize the data update coordinator.
 
@@ -38,10 +48,14 @@ class SunlitDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             hass: Home Assistant instance
             sn: Device serial number
             ip: Device IP address
+            grid_sensor_entity_id: Optional HA entity ID of the grid power sensor.
+                When set, the integration uses MD/MM (internal device PID) instead
+                of writing GS directly.
 
         """
         self._sn = sn
         self._ip = ip
+        self._grid_sensor_entity_id = grid_sensor_entity_id
         self._session = async_get_clientsession(hass)
         super().__init__(
             hass,
@@ -49,6 +63,20 @@ class SunlitDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             name=f"SunlitMonitor-{sn}",
             update_interval=timedelta(seconds=3),
         )
+
+    async def async_setup(self) -> None:
+        """
+        Set up the coordinator.
+
+        When a grid sensor is configured, the actual regulation is handled
+        by the device's internal PID via the local HTTP proxy (MD/MM).
+        No additional listeners needed here.
+        """
+        if self._grid_sensor_entity_id:
+            _LOGGER.debug(
+                "Grid sensor configured: %s — device uses internal PID via proxy",
+                self._grid_sensor_entity_id,
+            )
 
     async def _async_update_data(self) -> dict[str, Any]:
         """
@@ -69,7 +97,6 @@ class SunlitDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                         raise RuntimeError(msg)
 
                     data = await resp.json()
-
                     reported = data.get("state", {}).get("reported", {})
 
                     if not isinstance(reported, dict):

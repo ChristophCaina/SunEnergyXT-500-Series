@@ -21,6 +21,7 @@ Die vollstaendige Referenz der lokalen API, Beispiele fuer `MD`-Zaehlerverbindun
 - Ueberwachung von PV-Eingang, Netzanschlussleistung, Lastanschlussleistung, Batteriestand, Firmware-Versionen und weiteren Echtzeitdaten
 - Anpassung haeufig genutzter Einstellungen wie `GS`, `IS`, `SI`, `SA`, `SO` und `PT`
 - Konfiguration von lokalem Modus, `MM` Lokaler Eigenverbrauch, `MD` lokale Smart-Meter-Verbindung und dem Zeitzonenfeld `TZ`
+- **Automatische Eigenverbrauchsregelung ueber beliebigen Home Assistant Sensor** – kein dedizierter Smart Meter am Geraet erforderlich
 - Neustart des Geraets direkt aus Home Assistant
 
 ## Installation
@@ -72,12 +73,68 @@ custom_components
    - Wenn das Geraet automatisch gefunden wird, bestaetigen Sie einfach den Fund
    - Wenn das Geraet nicht automatisch gefunden wird, geben Sie die IP-Adresse manuell ein
 5. Die Integration liest SN und Modell automatisch aus. Eine manuelle Eingabe der SN ist nicht noetig
+6. **Optional:** Waehlen Sie einen Home Assistant Sensor als Netzfluss-Quelle (siehe naechsten Abschnitt)
 
 Hinweise zur Nutzung:
 
 - Home Assistant und das Geraet muessen sich im selben lokalen Netzwerk befinden
 - Wenn Sie die automatische Erkennung nutzen moechten, muss das Netzwerk mDNS / Zeroconf zulassen
 - Nach dem Aendern eines Steuerwerts sollte der finale Zustand durch die naechste Aktualisierung oder ein erneutes Auslesen bestaetigt werden
+
+## Automatische Eigenverbrauchsregelung ueber HA-Sensor
+
+Die Integration unterstuetzt eine optionale, herstellerunabhaengige Eigenverbrauchsregelung ueber einen beliebigen Home Assistant Leistungssensor.
+
+### Wie funktioniert das?
+
+Standardmaessig unterstuetzt der lokale Eigenverbrauchsmodus (`MM`) des Geraets nur bestimmte Smart Meter direkt (Shelly Pro 3EM, EcoTracker, Tasmota/BitShake). Wer einen anderen Energiezaehler verwendet – etwa ueber **SolarEdge Modbus**, **Tibber Pulse**, **Volkszaehler** oder eine andere Integration – kann den Netzfluss-Sensor aus Home Assistant direkt verwenden.
+
+Die Integration registriert dazu automatisch einen **lokalen HTTP-Endpunkt** in Home Assistant, der die Sensordaten im Shelly-kompatiblen Format bereitstellt. Das Geraet fragt diesen Endpunkt direkt ab und nutzt seinen **internen PID-Regler** fuer die Regelung – schnell, stabil und ohne Schwingen. Kein zusaetzliches Messgeraet am Speicher noetig.
+
+```
+HA Sensor (z.B. SolarEdge Meter)
+        ↓
+HA lokaler HTTP-Proxy
+  GET /api/sunenergyxt_proxy/{id}/status
+  → {"total_power": <Watt>}
+        ↓
+Geraet (MM=1, MD=Proxy-URL)
+  interner PID-Regler
+        ↓
+Automatische Lade-/Entladeregelung
+```
+
+### Einrichtung
+
+Im letzten Schritt des Setup-Dialogs erscheint ein optionaler Entity-Selector:
+
+> **Netzfluss-Sensor (optional)**
+> Waehle einen Home Assistant Sensor, der die aktuelle Netzleistung in Watt liefert.
+
+Waehlen Sie hier den Sensor, der den aktuellen Netzfluss an Ihrem Hausanschluss misst. Das Feld kann leer gelassen werden – in diesem Fall aendert sich nichts am bisherigen Verhalten.
+
+Nach der Konfiguration schreibt die Integration automatisch die `MD`-Verbindungszeichenkette und aktiviert `MM=1` auf dem Geraet. Beim Entfernen der Integration wird `MM` automatisch deaktiviert.
+
+### Vorzeichenkonvention
+
+Die Vorzeichenkonvention des gewaehlten Sensors muss mit der Geraete-API uebereinstimmen:
+
+| Wert | Bedeutung |
+|------|-----------|
+| **Positiv** | Einspeisung ins Netz (Ueberschuss) |
+| **Negativ** | Bezug aus dem Netz |
+
+> **Hinweis:** Pruefen Sie das Vorzeichen Ihres Sensors vor der Konfiguration. Viele Integrationen (z. B. SolarEdge Modbus Multi) liefern den Netzfluss bereits in dieser Konvention.
+
+### Beispiele fuer kompatible Sensoren
+
+| Quelle | Typische Entity-ID |
+|--------|--------------------|
+| SolarEdge Modbus Multi (HACS) | `sensor.solaredge_i1_m1_ac_power` |
+| Shelly Pro 3EM | `sensor.shelly_pro3em_total_active_power` |
+| Tibber Pulse | `sensor.tibber_power` |
+| Volkszaehler / SML | abhaengig von der Integration |
+| ESPHome (IR-Lesekopf) | abhaengig von der Konfiguration |
 
 ## Entitaetsbeschreibung
 
@@ -131,18 +188,32 @@ Hinweise:
 | `BS3` | Firmware-Version (BMS 3) | - | BMS-Firmware-Version des Erweiterungsspeichers 3 |
 | `BS4` | Firmware-Version (BMS 4) | - | BMS-Firmware-Version des Erweiterungsspeichers 4 |
 | `BS5` | Firmware-Version (BMS 5) | - | BMS-Firmware-Version des Erweiterungsspeichers 5 |
+| `PB` | Batterieleistung | W | Aktuelle Batterieleistung. Positiv = Laden, negativ = Entladen |
+| `PD` | Heutige PV-Energie | kWh | Heute erzeugte PV-Energie. Energy Dashboard kompatibel |
+| `BN` | Gesamtanzahl Batteriepacks | - | Gesamtanzahl der angeschlossenen Batteriepacks |
+| `WT` | WLAN-Netzwerkstatus | - | Netzwerkstatuscode des Geraets |
+| `TF` | System-Fehler-Bitmask | - | Fehler-Bitmask fuer Systemprompt-Ereignisse |
+| `EF` | EMS-Fehler-Bitmask | - | Fehler-Bitmask fuer EMS-Ereignisse |
+| `DF1` | DC-Fehler-Bitmask 1 | - | Fehler-Bitmask fuer DC-Ereignisse 1 |
+| `DF2` | DC-Fehler-Bitmask 2 | - | Fehler-Bitmask fuer DC-Ereignisse 2 |
+| `AF1` | AC-Fehler-Bitmask 1 | - | Fehler-Bitmask fuer AC-Ereignisse 1 |
+| `AF2` | AC-Fehler-Bitmask 2 | - | Fehler-Bitmask fuer AC-Ereignisse 2 |
+| `BF` | BMS-Fehler-Bitmask | - | Fehler-Bitmask fuer BMS-Ereignisse |
 | `SN` | SN des Systemhosts | - | Seriennummer des Geraets |
 | `MS` | Zaehlerstatus | - | Verbindungsstatus des lokalen Smart Meters. Hauefige Werte: `0 = Nicht gebunden`, `1 = Online`, `2 = Offline`; bei manchen Firmware-Versionen auch `3 = IP wird angefordert` |
 
 ### Number
 
 | Entitaets-ID | Name | Einheit | Bereich | Schritt | Beschreibung |
-|--------------|------|---------|---------|----------|--------------|
-| `GS` | Sollwert Leistung Netzanschluss | W | `-2400` bis `2400` | `10` | Sollwert fuer die Leistung am Netzanschluss. Positive Werte bedeuten in der Regel Einspeisung, negative Werte in der Regel Netzbezug oder Netzladen. Die uebliche obere positive Grenze ist `800W` fuer SunEnergyXT 500 und `2400W` fuer SunEnergyXT 500 Pro |
+|--------------|------|---------|---------|---------|--------------|
+| `GS` | Sollwert Leistung Netzanschluss | W | `-2400` bis `2400` | `10` | Sollwert fuer die Leistung am Netzanschluss. Bei konfiguriertem Netzfluss-Sensor wird dieser Wert vom Geraet intern geregelt. |
 | `IS` | Sollwert max. Wechselrichterleistung | W | `1` bis `2400` | `10` | Maximale Wechselrichter-Ausgangsleistung. Die Obergrenze liegt bei `800W` fuer SunEnergyXT 500 und `2400W` fuer SunEnergyXT 500 Pro |
 | `SI` | System Entladegrenze | % | `1` bis `30` | `1` | Minimaler SOC fuer Entladung im On-Grid-Betrieb |
 | `SA` | System Ladegrenze | % | `70` bis `100` | `1` | Maximaler SOC fuer Ladung im On-Grid-Betrieb |
 | `SO` | Systemlastanschluss-Entladegrenze | % | `1` bis `30` | `1` | Minimaler SOC fuer Entladung im Off-Grid- bzw. Lastanschluss-Betrieb |
+| `UP` | UPS PV-Bypass-Leistung | W | `20` bis `2400` | `10` | PV-Bypass-Leistung im UPS-Modus nach voller Ladung |
+| `UG` | UPS Netzladeleistung | W | `0` bis `2400` | `10` | Netzladeleistung im UPS-Modus. 0 = keine Netzladung |
+| `FP` | Max. PV-Bypass-Ausgangsleistung | W | `20` bis `2400` | `10` | Maximale PV-Bypass-Ausgangsleistung nach vollstaendiger Batterieladung |
 | `PT` | Einstellung der automatischen Abschaltzeit | min | `30` bis `1440` | `1` | Zeit fuer die automatische Abschaltung |
 
 ### Switch
@@ -150,15 +221,16 @@ Hinweise:
 | Entitaets-ID | Name | Beschreibung |
 |--------------|------|--------------|
 | `LM` | Lokaler Modus | Schalter fuer den lokalen Modus. Wenn aktiv, priorisiert das Geraet die lokale Konfiguration |
-| `MM` | Lokaler Eigenverbrauch | Schalter fuer den Modus "Lokaler Eigenverbrauch". Vor dem Aktivieren sollte eine gueltige `MD`-Smart-Meter-Verbindung hinterlegt werden |
+| `MM` | Lokaler Eigenverbrauch | Schalter fuer den Modus "Lokaler Eigenverbrauch". Wird bei konfiguriertem Netzfluss-Sensor automatisch aktiviert. |
+| `UO` | UPS-Modus | Schalter fuer den UPS-Modus. Wenn aktiv, koennen viele nicht UPS-bezogene Einstellungen wirkungslos bleiben |
 | `PM` | Parallelschaltmodus des Systems | Schalter fuer den Parallelbetrieb. Nur verwenden, wenn Geraetetopologie und Firmware dies unterstuetzen |
 
 ### Text
 
 | Entitaets-ID | Name | Beschreibung |
 |--------------|------|--------------|
-| `MD` | Lokale Smart-Meter-Verbindung | JSON-Zeichenkette fuer die lokale Smart-Meter-Verbindung im Modus "Lokaler Eigenverbrauch". Es muss exakt der finale geraeteseitige Wert aus [API.md](API.md) verwendet werden. Die Einstellung wirkt direkt, ist aber kein garantiertes Ruecklesefeld |
-| `TZ` | Systemzeitzone | POSIX-Zeitzonenstring. Fuer China kann z. B. `CST-8` verwendet werden; fuer Deutschland mit Sommerzeit z. B. `CET-1CEST,M3.5.0,M10.5.0/3`. Die Einstellung wirkt direkt, ist aber kein garantiertes Ruecklesefeld |
+| `MD` | Lokale Smart-Meter-Verbindung | JSON-Zeichenkette fuer die lokale Smart-Meter-Verbindung im Modus "Lokaler Eigenverbrauch". Wird bei konfiguriertem Netzfluss-Sensor automatisch gesetzt. Bei manueller Konfiguration muss exakt der finale geraeteseitige Wert aus [API.md](API.md) verwendet werden. Die Einstellung wirkt direkt, ist aber kein garantiertes Ruecklesefeld |
+| `TZ` | Systemzeitzone | POSIX-Zeitzonenstring. Fuer China kann z. B. `CST-8` verwendet werden; fuer Deutschland mit Sommerzeit z. B. `CET-1CEST,M3.5.0,M10.5.0/3`. |
 
 ### Button
 
@@ -181,7 +253,14 @@ Hinweise:
 - Pruefen Sie, ob `http://geraete-ip/read` direkt erreichbar ist
 - Bestaetigen Sie nach einer Aenderung den finalen Zustand stets durch erneutes Auslesen
 
-### Lokaler Eigenverbrauch funktioniert nicht
+### Eigenverbrauchsregelung funktioniert nicht (MS = Nicht gebunden)
+
+- Pruefen Sie ob der konfigurierte Sensor einen gueltigen numerischen Wert in Watt liefert
+- Pruefen Sie ob Home Assistant vom Geraet aus erreichbar ist: `curl http://ha-ip:8123/api/sunenergyxt_proxy/{entry_id}/status`
+- Stellen Sie sicher dass `LM` (Lokaler Modus) aktiviert ist
+- Pruefen Sie in den HA-Logs ob Fehlermeldungen vorliegen (`Logger: custom_components.sunenergyxt`)
+
+### Lokaler Eigenverbrauch funktioniert nicht (ohne HA-Sensor)
 
 - Stellen Sie sicher, dass `MD` exakt dem Zaehlerbeispiel in [API.md](API.md) entspricht
 - Stellen Sie sicher, dass `MM` aktiviert ist

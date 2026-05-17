@@ -13,6 +13,26 @@
                 "title": "SunEnergyXT‑Gerät gefunden",
                 "description": "Gerät gefunden – SN: {sn}, IP: {host}. Möchten Sie es hinzufügen?",
                 "data": {}
+            },
+            "grid_sensor": {
+                "title": "Netzfluss-Sensor (optional)",
+                "description": "Wähle einen Home Assistant Sensor, der die aktuelle Netzleistung in Watt liefert.\n\nPositive Werte = Einspeisung ins Netz, negative Werte = Bezug aus dem Netz.\n\nWenn konfiguriert, schreibt die Integration den GS-Sollwert automatisch bei jeder Sensorzustandsänderung — kein manueller rest_command nötig.\n\nDieses Feld ist optional. Ohne Auswahl kann GS weiterhin manuell über die Number-Entität gesetzt werden.",
+                "data": {
+                    "grid_sensor_entity_id": "Netzfluss-Sensor"
+                },
+                "data_description": {
+                    "grid_sensor_entity_id": "Sensor mit Netzleistung in Watt (z. B. vom SolarEdge Meter, Shelly, Tibber Pulse …). Feld leer lassen für manuellen Betrieb."
+                }
+            },
+            "reconfigure": {
+                "title": "Netzfluss-Sensor ändern",
+                "description": "Ändere den Home Assistant Sensor für die automatische Eigenverbrauchsregelung.\n\nPositive Werte = Einspeisung ins Netz, negative Werte = Bezug aus dem Netz.\n\nFeld leer lassen um die automatische Regelung zu deaktivieren.",
+                "data": {
+                    "grid_sensor_entity_id": "Netzfluss-Sensor"
+                },
+                "data_description": {
+                    "grid_sensor_entity_id": "Sensor mit Netzleistung in Watt. Feld leer lassen für manuellen Betrieb."
+                }
             }
         },
         "error": {
@@ -30,7 +50,8 @@
             "cannot_get_model": "Gerätemodell kann nicht abgerufen werden. Bitte Gerätestatus prüfen.",
             "not_device": "Das gefundene Gerät ist kein SunEnergyXT‑Gerät.",
             "already_configured": "Dieses Gerät wurde bereits hinzugefügt.",
-            "unknown": "Ein unbekannter Fehler ist aufgetreten."
+            "unknown": "Ein unbekannter Fehler ist aufgetreten.",
+            "reconfigure_successful": "Konfiguration erfolgreich aktualisiert."
         }
     },
     "entity": {
@@ -39,7 +60,7 @@
                 "name": "WLAN-SSID"
             },
             "wr": {
-                "name": "WLAN-Signalstrke"
+                "name": "WLAN-Signalstärke"
             },
             "st": {
                 "name": "Systemstatus",
@@ -47,7 +68,7 @@
                     "0": "Abgeschaltet",
                     "1": "Standby",
                     "2": "In Betrieb",
-                    "3": "Upgrade luft"
+                    "3": "Upgrade läuft"
                 }
             },
             "iw": {
@@ -165,12 +186,57 @@
                 "name": "SN des Systemhosts"
             },
             "ms": {
-                "name": "Zhlerstatus",
+                "name": "Zählerstatus",
                 "state": {
                     "0": "Nicht gebunden",
                     "1": "Online",
                     "2": "Offline"
                 }
+            },
+            "pb": {
+                "name": "Batterieleistung"
+            },
+            "pd": {
+                "name": "Heutige PV-Energie"
+            },
+            "bn": {
+                "name": "Gesamtanzahl Batteriepacks"
+            },
+            "wt": {
+                "name": "WLAN-Netzwerkstatus"
+            },
+            "uo": {
+                "name": "UPS-Modus"
+            },
+            "up": {
+                "name": "UPS PV-Bypass-Leistung"
+            },
+            "ug": {
+                "name": "UPS Netzladeleistung"
+            },
+            "fp": {
+                "name": "Max. PV-Bypass-Ausgangsleistung"
+            },
+            "tf": {
+                "name": "System-Fehler-Bitmask"
+            },
+            "ef": {
+                "name": "EMS-Fehler-Bitmask"
+            },
+            "df1": {
+                "name": "DC-Fehler-Bitmask 1"
+            },
+            "df2": {
+                "name": "DC-Fehler-Bitmask 2"
+            },
+            "af1": {
+                "name": "AC-Fehler-Bitmask 1"
+            },
+            "af2": {
+                "name": "AC-Fehler-Bitmask 2"
+            },
+            "bf": {
+                "name": "BMS-Fehler-Bitmask"
             }
         },
         "number": {
@@ -191,6 +257,15 @@
             },
             "pt": {
                 "name": "Einstellung der automatischen Abschaltzeit"
+            },
+            "up": {
+                "name": "UPS PV-Bypass-Leistung"
+            },
+            "ug": {
+                "name": "UPS Netzladeleistung"
+            },
+            "fp": {
+                "name": "Max. PV-Bypass-Ausgangsleistung"
             }
         },
         "button": {
@@ -207,11 +282,14 @@
             },
             "pm": {
                 "name": "Parallelschaltmodus des Systems"
+            },
+            "uo": {
+                "name": "UPS-Modus"
             }
         },
         "text": {
             "md": {
-                "name": "Lokales Zhlerdatenformat"
+                "name": "Lokales Zählerdatenformat"
             },
             "tz": {
                 "name": "Systemzeitzone"

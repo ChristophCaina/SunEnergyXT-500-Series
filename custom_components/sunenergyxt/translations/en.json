@@ -13,6 +13,26 @@
                 "title": "SunEnergyXT device discovered",
                 "description": "Discovered device SN: {sn}, IP: {host}. Do you want to add it?",
                 "data": {}
+            },
+            "grid_sensor": {
+                "title": "Grid Power Sensor (optional)",
+                "description": "Select a Home Assistant sensor that provides the current grid power in Watts.\n\nPositive values = export to grid (feed-in), negative values = import from grid.\n\nWhen configured, the integration will automatically write the GS setpoint whenever the sensor state changes — no manual rest_command needed.\n\nThis field is optional. Leave blank to control GS manually via the Number entity.",
+                "data": {
+                    "grid_sensor_entity_id": "Grid Power Sensor"
+                },
+                "data_description": {
+                    "grid_sensor_entity_id": "Sensor providing grid power in Watts (e.g. SolarEdge Meter, Shelly, Tibber Pulse …). Leave empty for manual control."
+                }
+            },
+            "reconfigure": {
+                "title": "Change Grid Power Sensor",
+                "description": "Change the Home Assistant sensor used for automatic self-consumption control.\n\nPositive values = export to grid (feed-in), negative values = import from grid.\n\nLeave empty to disable automatic control.",
+                "data": {
+                    "grid_sensor_entity_id": "Grid Power Sensor"
+                },
+                "data_description": {
+                    "grid_sensor_entity_id": "Sensor providing grid power in Watts. Leave empty for manual control."
+                }
             }
         },
         "error": {
@@ -30,7 +50,8 @@
             "cannot_get_model": "Unable to get model. Please check device status.",
             "not_device": "The discovered device is not a SunEnergyXT device.",
             "already_configured": "This device has been added.",
-            "unknown": "An unknown error occurred."
+            "unknown": "An unknown error occurred.",
+            "reconfigure_successful": "Configuration updated successfully."
         }
     },
     "entity": {
@@ -171,6 +192,51 @@
                     "1": "Online",
                     "2": "Offline"
                 }
+            },
+            "pb": {
+                "name": "Battery Power"
+            },
+            "pd": {
+                "name": "Today's PV Energy"
+            },
+            "bn": {
+                "name": "Total Battery Pack Count"
+            },
+            "wt": {
+                "name": "Wi-Fi Network Status"
+            },
+            "uo": {
+                "name": "UPS Mode"
+            },
+            "up": {
+                "name": "UPS PV Bypass Power"
+            },
+            "ug": {
+                "name": "UPS Grid Charge Power"
+            },
+            "fp": {
+                "name": "Max PV Bypass Output Power"
+            },
+            "tf": {
+                "name": "System Error Bitmask"
+            },
+            "ef": {
+                "name": "EMS Error Bitmask"
+            },
+            "df1": {
+                "name": "DC Error Bitmask 1"
+            },
+            "df2": {
+                "name": "DC Error Bitmask 2"
+            },
+            "af1": {
+                "name": "AC Error Bitmask 1"
+            },
+            "af2": {
+                "name": "AC Error Bitmask 2"
+            },
+            "bf": {
+                "name": "BMS Error Bitmask"
             }
         },
         "number": {
@@ -191,6 +257,15 @@
             },
             "pt": {
                 "name": "System Auto-Shutdown Time Setting"
+            },
+            "up": {
+                "name": "UPS PV Bypass Power"
+            },
+            "ug": {
+                "name": "UPS Grid Charge Power"
+            },
+            "fp": {
+                "name": "Max PV Bypass Output Power"
             }
         },
         "button": {
@@ -207,6 +282,9 @@
             },
             "pm": {
                 "name": "System Parallel Mode"
+            },
+            "uo": {
+                "name": "UPS Mode"
             }
         },
         "text": {

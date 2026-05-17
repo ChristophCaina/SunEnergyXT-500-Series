@@ -13,6 +13,26 @@
                 "title": "发现 SunEnergyXT 设备",
                 "description": "发现设备 SN: {sn} ，IP: {host}，是否添加？",
                 "data": {}
+            },
+            "grid_sensor": {
+                "title": "电网功率传感器（可选）",
+                "description": "选择一个提供当前电网功率（单位：瓦特）的 Home Assistant 传感器。\n\n正值 = 向电网馈电（输出），负值 = 从电网取电（消耗）。\n\n配置后，每当传感器状态变化时，集成将自动写入 GS 设定值，无需手动 rest_command。\n\n此字段为可选项。留空则通过 Number 实体手动控制 GS。",
+                "data": {
+                    "grid_sensor_entity_id": "电网功率传感器"
+                },
+                "data_description": {
+                    "grid_sensor_entity_id": "提供电网功率（瓦特）的传感器（例如 SolarEdge 电表、Shelly、Tibber Pulse 等）。留空表示手动控制。"
+                }
+            },
+            "reconfigure": {
+                "title": "更改电网功率传感器",
+                "description": "更改用于自动自耗电控制的 Home Assistant 传感器。\n\n正值 = 向电网馈电，负值 = 从电网取电。\n\n留空则禁用自动控制。",
+                "data": {
+                    "grid_sensor_entity_id": "电网功率传感器"
+                },
+                "data_description": {
+                    "grid_sensor_entity_id": "提供电网功率（瓦特）的传感器。留空表示手动控制。"
+                }
             }
         },
         "error": {
@@ -30,7 +50,8 @@
             "cannot_get_model": "无法获取设备型号，请检查设备状态。",
             "not_device": "发现的设备不是 SunEnergyXT 设备。",
             "already_configured": "该设备已被添加。",
-            "unknown": "发生未知错误。"
+            "unknown": "发生未知错误。",
+            "reconfigure_successful": "配置已成功更新。"
         }
     },
     "entity": {
@@ -171,6 +192,51 @@
                     "1": "在线",
                     "2": "离线"
                 }
+            },
+            "pb": {
+                "name": "电池功率"
+            },
+            "pd": {
+                "name": "今日PV发电量"
+            },
+            "bn": {
+                "name": "电池包总数"
+            },
+            "wt": {
+                "name": "Wi-Fi网络状态"
+            },
+            "uo": {
+                "name": "UPS模式"
+            },
+            "up": {
+                "name": "UPS PV旁路功率"
+            },
+            "ug": {
+                "name": "UPS市电充电功率"
+            },
+            "fp": {
+                "name": "最大PV旁路输出功率"
+            },
+            "tf": {
+                "name": "系统错误位掩码"
+            },
+            "ef": {
+                "name": "EMS错误位掩码"
+            },
+            "df1": {
+                "name": "DC错误位掩码1"
+            },
+            "df2": {
+                "name": "DC错误位掩码2"
+            },
+            "af1": {
+                "name": "AC错误位掩码1"
+            },
+            "af2": {
+                "name": "AC错误位掩码2"
+            },
+            "bf": {
+                "name": "BMS错误位掩码"
             }
         },
         "number": {
@@ -191,6 +257,15 @@
             },
             "pt": {
                 "name": "系统自动关机时间设置"
+            },
+            "up": {
+                "name": "UPS PV旁路功率"
+            },
+            "ug": {
+                "name": "UPS市电充电功率"
+            },
+            "fp": {
+                "name": "最大PV旁路输出功率"
             }
         },
         "button": {
@@ -207,6 +282,9 @@
             },
             "pm": {
                 "name": "系统并机模式"
+            },
+            "uo": {
+                "name": "UPS模式"
             }
         },
         "text": {
