@@ -314,6 +314,76 @@ SENSOR_META: dict[str, dict[str, Any]] = {
         "entity_category": EntityCategory.DIAGNOSTIC,
         "icon": "mdi:meter-electric",
     },
+    "PD": {
+        "unit": UnitOfEnergy.KILO_WATT_HOUR,
+        "device_class": SensorDeviceClass.ENERGY,
+        "scale": 0.001,
+        "precision": 3,
+        "state_class": SensorStateClass.TOTAL_INCREASING,
+        "icon": "mdi:solar-power",
+    },
+    "BN": {
+        "entity_category": EntityCategory.DIAGNOSTIC,
+        "state_class": SensorStateClass.MEASUREMENT,
+        "icon": "mdi:battery-check-outline",
+    },
+    "WT": {
+        "entity_category": EntityCategory.DIAGNOSTIC,
+        "icon": "mdi:wifi-cog",
+    },
+    "UO": {
+        "entity_category": EntityCategory.DIAGNOSTIC,
+        "icon": "mdi:power-plug-outline",
+    },
+    "UP": {
+        "unit": UnitOfPower.WATT,
+        "device_class": SensorDeviceClass.POWER,
+        "entity_category": EntityCategory.DIAGNOSTIC,
+        "state_class": SensorStateClass.MEASUREMENT,
+        "icon": "mdi:solar-power-variant",
+    },
+    "UG": {
+        "unit": UnitOfPower.WATT,
+        "device_class": SensorDeviceClass.POWER,
+        "entity_category": EntityCategory.DIAGNOSTIC,
+        "state_class": SensorStateClass.MEASUREMENT,
+        "icon": "mdi:transmission-tower-import",
+    },
+    "FP": {
+        "unit": UnitOfPower.WATT,
+        "device_class": SensorDeviceClass.POWER,
+        "entity_category": EntityCategory.DIAGNOSTIC,
+        "state_class": SensorStateClass.MEASUREMENT,
+        "icon": "mdi:solar-power-variant-outline",
+    },
+    "TF": {
+        "entity_category": EntityCategory.DIAGNOSTIC,
+        "icon": "mdi:alert-circle-outline",
+    },
+    "EF": {
+        "entity_category": EntityCategory.DIAGNOSTIC,
+        "icon": "mdi:alert-circle-outline",
+    },
+    "DF1": {
+        "entity_category": EntityCategory.DIAGNOSTIC,
+        "icon": "mdi:alert-circle-outline",
+    },
+    "DF2": {
+        "entity_category": EntityCategory.DIAGNOSTIC,
+        "icon": "mdi:alert-circle-outline",
+    },
+    "AF1": {
+        "entity_category": EntityCategory.DIAGNOSTIC,
+        "icon": "mdi:alert-circle-outline",
+    },
+    "AF2": {
+        "entity_category": EntityCategory.DIAGNOSTIC,
+        "icon": "mdi:alert-circle-outline",
+    },
+    "BF": {
+        "entity_category": EntityCategory.DIAGNOSTIC,
+        "icon": "mdi:alert-circle-outline",
+    },
 }
 
 
@@ -390,6 +460,20 @@ async def async_setup_entry(
         "DS",
         "SN",
         "MS",
+        "PD",
+        "BN",
+        "WT",
+        "UO",
+        "UP",
+        "UG",
+        "FP",
+        "TF",
+        "EF",
+        "DF1",
+        "DF2",
+        "AF1",
+        "AF2",
+        "BF",
     ]
 
     for key in keys:
