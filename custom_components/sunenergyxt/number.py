@@ -154,6 +154,7 @@ async def async_setup_entry(
                 key=key,
                 sn=sn,
                 ip=ip,
+                model=model,
                 device_info=device_info,
                 hass=hass,
             )
@@ -180,6 +181,7 @@ class SunlitNumber(CoordinatorEntity[SunlitDataUpdateCoordinator], NumberEntity)
         key: str,
         sn: str,
         ip: str,
+        model: str,
         device_info: DeviceInfo,
         hass: HomeAssistant,
     ) -> None:
@@ -192,6 +194,7 @@ class SunlitNumber(CoordinatorEntity[SunlitDataUpdateCoordinator], NumberEntity)
             key: Parameter key
             sn: Device serial number
             ip: Device IP address
+            model: Device model string
             device_info: Device information
             hass: Home Assistant instance
 
@@ -200,6 +203,7 @@ class SunlitNumber(CoordinatorEntity[SunlitDataUpdateCoordinator], NumberEntity)
         self._key = key
         self._sn = sn
         self._ip = ip
+        self._model = model
         self._session = async_get_clientsession(hass)
 
         meta = NUMBER_META.get(key, {})
@@ -218,7 +222,7 @@ class SunlitNumber(CoordinatorEntity[SunlitDataUpdateCoordinator], NumberEntity)
             self._attr_native_max_value = max_value
 
         # Cap GS and IS for SunEnergyXT 500 (non-Pro) model
-        if model == "SunEnergyXT500":
+        if self._model == "SunEnergyXT500":
             if self._key in ("GS", "IS"):
                 self._attr_native_max_value = 800
 
