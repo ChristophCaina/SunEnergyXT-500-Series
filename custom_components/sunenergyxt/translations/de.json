@@ -196,9 +196,6 @@
             "pb": {
                 "name": "Batterieleistung"
             },
-            "pd": {
-                "name": "Heutige PV-Energie"
-            },
             "bn": {
                 "name": "Gesamtanzahl Batteriepacks"
             },
@@ -207,9 +204,6 @@
             },
             "uo": {
                 "name": "UPS-Modus"
-            },
-            "up": {
-                "name": "UPS PV-Bypass-Leistung"
             },
             "ug": {
                 "name": "UPS Netzladeleistung"
@@ -257,9 +251,6 @@
             },
             "pt": {
                 "name": "Einstellung der automatischen Abschaltzeit"
-            },
-            "up": {
-                "name": "UPS PV-Bypass-Leistung"
             },
             "ug": {
                 "name": "UPS Netzladeleistung"
