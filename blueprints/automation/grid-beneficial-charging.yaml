@@ -40,43 +40,47 @@ blueprint:
         battery_soc_sensor:
           name: "Speicher SOC (Sensor)"
           description: >
-            Aktueller Ladestand des Speichers in Prozent.
-            Typisch: sensor.{seriennummer}_sc
+            Aktueller Ladestand des Speichers in Prozent (API-Feld: SC).
+            Zeigt nur Sensoren der SunEnergyXT-Integration.
           selector:
             entity:
               filter:
-                - device_class: battery
+                - integration: sunenergyxt
+                  domain: sensor
 
         battery_gs_number:
           name: "Grid Setpoint GS (Number)"
           description: >
             Steuert die Lade-/Entladeleistung. Negativ = Laden, Positiv = Entladen.
-            Typisch: number.{seriennummer}_gs
+            API-Feld: GS. Zeigt nur Number-Entities der SunEnergyXT-Integration.
           selector:
             entity:
               filter:
-                - domain: number
+                - integration: sunenergyxt
+                  domain: number
 
         battery_is_number:
           name: "Max. Inverterleistung IS (Number)"
           description: >
             Maximale Lade-/Entladeleistung in Watt (Hardware-Obergrenze).
-            Typisch: number.{seriennummer}_is
+            API-Feld: IS. Zeigt nur Number-Entities der SunEnergyXT-Integration.
           selector:
             entity:
               filter:
-                - domain: number
+                - integration: sunenergyxt
+                  domain: number
 
         battery_mm_switch:
           name: "Self-Consumption Modus MM (Switch)"
           description: >
             MM=0 beim aktiven Laden (Blueprint übernimmt Steuerung).
             MM=1 in allen anderen Situationen (interner PID übernimmt).
-            Typisch: switch.{seriennummer}_mm
+            API-Feld: MM. Zeigt nur Switches der SunEnergyXT-Integration.
           selector:
             entity:
               filter:
-                - domain: switch
+                - integration: sunenergyxt
+                  domain: switch
 
     # =========================================================================
     # SPEICHER – SOC Grenzen (optional)
@@ -89,21 +93,23 @@ blueprint:
 
         battery_sa_number:
           name: "Max. Charge SOC SA (Number, optional)"
-          description: "Typisch: number.{seriennummer}_sa. Fallback: 100%"
+          description: "API-Feld: SA. Fallback: 100%. Nur SunEnergyXT Number-Entities."
           default:
           selector:
             entity:
               filter:
-                - domain: number
+                - integration: sunenergyxt
+                  domain: number
 
         battery_si_number:
           name: "Min. Discharge SOC SI (Number, optional)"
-          description: "Typisch: number.{seriennummer}_si. Fallback: 10%"
+          description: "API-Feld: SI. Fallback: 10%. Nur SunEnergyXT Number-Entities."
           default:
           selector:
             entity:
               filter:
-                - domain: number
+                - integration: sunenergyxt
+                  domain: number
 
         discharge_reserve_soc:
           name: "Nacht-Reserve SOC (%)"
@@ -581,15 +587,7 @@ trigger:
   - platform: time_pattern
     minutes: !input update_interval_minutes
 
-  # Sofortige Reaktion bei EV-Statusänderung
-  - platform: state
-    entity_id: !input wallbox_power_sensor
-  - platform: state
-    entity_id: !input ev1_charging_power_sensor
-  - platform: state
-    entity_id: !input ev2_charging_power_sensor
-
-  # Sofortige Reaktion bei Moduswechsel
+  # Sofortige Reaktion bei Moduswechsel (Pflichtfeld, immer gesetzt)
   - platform: state
     entity_id: !input charging_mode_entity
 
