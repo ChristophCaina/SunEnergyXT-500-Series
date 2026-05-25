@@ -1,25 +1,29 @@
 blueprint:
-  name: "SunEnergyXT – Netzdienliche Speicherladung & Entladung"
+  name: "SunEnergyXT – Grid-Beneficial Charging & Discharging"
   description: >
-    Steuert den SunEnergyXT Speicher vollständig netzdienlich über zwei Zustände:
+    **Version 1.0.0**
 
-    **Aktives Laden (MM=0, GS negativ):** Nur wenn Ladezeit aktiv, PV-Überschuss
-    vorhanden und die Glockenkurve einen Sollwert > 0 liefert. Die Ladeleistung
-    folgt der Kurve angepasst an Prognose, SOC, Wetter und E-Auto-Priorität.
+    Controls the SunEnergyXT battery storage in a grid-beneficial way using
+    two operating modes:
 
-    **PID-Modus (MM=1, GS=0):** In allen anderen Situationen – tagsüber bei
-    Bedarf (Entladung), abends, nachts und beim Neustart. Der interne PID des
-    Geräts regelt auf Nulleinspeisung: lädt bei Überschuss, entlädt bei Bedarf.
+    **Active Charging (MM=0, GS negative):** Only when within the configured
+    charge window, PV surplus is available, and the bell curve yields a target
+    power > 0. Charging power follows the curve, adjusted by forecast, SOC,
+    weather and EV priority.
 
-    **Pflichtfelder:** Speicher GS, IS, SC, MM
-    **Optional:** SA/SI vom Gerät, Solar-Forecast (3×), Wetter, Wallbox/EV (2×)
+    **PID Mode (MM=1, GS=0):** In all other situations – discharging on demand
+    during the day, evening discharge, night, and after HA restart. The device's
+    internal PID regulates to zero grid feed-in automatically.
+
+    **Required:** Battery GS, IS, SC, MM entities
+    **Optional:** SA/SI from device, Solar Forecast (up to 3), Weather,
+    Wallbox/EV (up to 2 vehicles)
   domain: automation
   author: "SunEnergyXT Community"
   homeassistant:
     min_version: "2024.6.0"
-  blueprint:
-  name: "SunEnergyXT – Netzdienliche Speicherladung & Entladung"
   source_url: "https://github.com/ChristophCaina/SunEnergyXT-500-Series/blob/main/blueprints/automation/grid-beneficial-charging.yaml"
+
   input:
 
     # =========================================================================
