@@ -77,14 +77,6 @@ NUMBER_META: dict[str, dict[str, Any]] = {
         "device_class": NumberDeviceClass.DURATION,
         "icon": "mdi:timer-outline",
     },
-    "UP": {
-        "min_value": 20,
-        "max_value": 2400,
-        "step": 10,
-        "unit": UnitOfPower.WATT,
-        "device_class": NumberDeviceClass.POWER,
-        "icon": "mdi:solar-power-variant",
-    },
     "UG": {
         "min_value": 0,
         "max_value": 2400,
@@ -141,7 +133,6 @@ async def async_setup_entry(
         "SA",
         "SO",
         "PT",
-        "UP",
         "UG",
         "FP",
     ]
@@ -253,8 +244,7 @@ class SunlitNumber(CoordinatorEntity[SunlitDataUpdateCoordinator], NumberEntity)
         """
         raw = self.coordinator.data.get(self._key)
         if raw is None:
-            _LOGGER.warning("None value from device for %s", self._key)
-            return None
+            return None  # valid – field not provided by this device/firmware
 
         try:
             return float(raw)
