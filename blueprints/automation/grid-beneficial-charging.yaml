@@ -1,0 +1,725 @@
+blueprint:
+  name: "SunEnergyXT – Netzdienliche Speicherladung & Entladung"
+  description: >
+    Steuert den SunEnergyXT Speicher vollständig netzdienlich über zwei Zustände:
+
+    **Aktives Laden (MM=0, GS negativ):** Nur wenn Ladezeit aktiv, PV-Überschuss
+    vorhanden und die Glockenkurve einen Sollwert > 0 liefert. Die Ladeleistung
+    folgt der Kurve angepasst an Prognose, SOC, Wetter und E-Auto-Priorität.
+
+    **PID-Modus (MM=1, GS=0):** In allen anderen Situationen – tagsüber bei
+    Bedarf (Entladung), abends, nachts und beim Neustart. Der interne PID des
+    Geräts regelt auf Nulleinspeisung: lädt bei Überschuss, entlädt bei Bedarf.
+
+    **Pflichtfelder:** Speicher GS, IS, SC, MM
+    **Optional:** SA/SI vom Gerät, Solar-Forecast (3×), Wetter, Wallbox/EV (2×)
+  domain: automation
+  author: "SunEnergyXT Community"
+  homeassistant:
+    min_version: "2024.6.0"
+  blueprint:
+  name: "SunEnergyXT – Netzdienliche Speicherladung & Entladung"
+  source_url: "https://github.com/ChristophCaina/SunEnergyXT-500-Series/blob/main/blueprints/automation/grid-beneficial-charging.yaml"
+  input:
+
+    # =========================================================================
+    # SPEICHER – Pflichtfelder
+    # =========================================================================
+    section_battery:
+      name: "🔋 Speicher"
+      icon: mdi:battery-charging
+      collapsed: false
+      input:
+
+        battery_soc_sensor:
+          name: "Speicher SOC (Sensor)"
+          description: >
+            Aktueller Ladestand des Speichers in Prozent.
+            Typisch: sensor.{seriennummer}_sc
+          selector:
+            entity:
+              filter:
+                - device_class: battery
+
+        battery_gs_number:
+          name: "Grid Setpoint GS (Number)"
+          description: >
+            Steuert die Lade-/Entladeleistung. Negativ = Laden, Positiv = Entladen.
+            Typisch: number.{seriennummer}_gs
+          selector:
+            entity:
+              filter:
+                - domain: number
+
+        battery_is_number:
+          name: "Max. Inverterleistung IS (Number)"
+          description: >
+            Maximale Lade-/Entladeleistung in Watt (Hardware-Obergrenze).
+            Typisch: number.{seriennummer}_is
+          selector:
+            entity:
+              filter:
+                - domain: number
+
+        battery_mm_switch:
+          name: "Self-Consumption Modus MM (Switch)"
+          description: >
+            Kern der Steuerung: MM=0 beim aktiven Laden (Blueprint übernimmt),
+            MM=1 in allen anderen Situationen (PID des Geräts übernimmt).
+            Typisch: switch.{seriennummer}_mm
+          selector:
+            entity:
+              filter:
+                - domain: switch
+
+    # =========================================================================
+    # SPEICHER – SOC Grenzen (optional, direkt vom Gerät)
+    # =========================================================================
+    section_battery_limits:
+      name: "🔋 Speicher – SOC Grenzen (optional)"
+      icon: mdi:battery-arrow-up
+      collapsed: true
+      input:
+
+        battery_sa_number:
+          name: "Max. Charge SOC SA (Number, optional)"
+          description: >
+            Maximaler Ladestand in %. Wenn nicht gesetzt → 100%.
+            Typisch: number.{seriennummer}_sa
+          default:
+          selector:
+            entity:
+              filter:
+                - domain: number
+
+        battery_si_number:
+          name: "Min. Discharge SOC SI (Number, optional)"
+          description: >
+            Minimaler Entladestand in %. Wenn nicht gesetzt → 10%.
+            Typisch: number.{seriennummer}_si
+          default:
+          selector:
+            entity:
+              filter:
+                - domain: number
+
+    # =========================================================================
+    # PV & NETZ
+    # =========================================================================
+    section_pv:
+      name: "☀️ PV & Netz"
+      icon: mdi:solar-power
+      collapsed: false
+      input:
+
+        pv_power_sensor:
+          name: "PV Leistung aktuell (Sensor)"
+          description: >
+            Aktuelle PV-Erzeugungsleistung in Watt (positiv).
+            z.B. sensor.solaredge_i1_ac_power
+          selector:
+            entity:
+              filter:
+                - device_class: power
+
+        grid_power_sensor:
+          name: "Netzanschluss – Leistung (Sensor)"
+          description: >
+            Aktuelle Leistung am Netzanschlusspunkt in Watt.
+            Positiv = Einspeisung (Überschuss), Negativ = Bezug (Bedarf).
+            Wird tagsüber genutzt um zu entscheiden ob aktives Laden oder
+            PID-Entladung sinnvoller ist.
+            z.B. sensor.solaredge_i1_m1_ac_power
+          selector:
+            entity:
+              filter:
+                - device_class: power
+
+        house_base_load:
+          name: "Grundlast Haus (Watt)"
+          description: >
+            Geschätzter Mindest-Hausverbrauch in Watt. Wird vom PV-Überschuss
+            abgezogen bevor der Speicher aktiv lädt.
+          default: 300
+          selector:
+            number:
+              min: 0
+              max: 2000
+              step: 50
+              unit_of_measurement: "W"
+
+        min_surplus_to_charge:
+          name: "Mindest-Überschuss zum aktiven Laden (Watt)"
+          description: >
+            Erst ab diesem Überschuss (nach Grundlast und E-Auto) schaltet
+            der Blueprint in den aktiven Lademodus (MM=0). Liegt der Überschuss
+            darunter, bleibt MM=1 – der PID regelt dann selbst.
+          default: 100
+          selector:
+            number:
+              min: 0
+              max: 1000
+              step: 50
+              unit_of_measurement: "W"
+
+    # =========================================================================
+    # SOLAR PROGNOSE (bis zu 3 Sensoren)
+    # =========================================================================
+    section_forecast:
+      name: "📈 Solar-Prognose (optional)"
+      icon: mdi:chart-bell-curve
+      collapsed: true
+      input:
+
+        solar_forecast_sensor_1:
+          name: "Solar-Prognose Sensor 1 (optional)"
+          description: >
+            Prognostizierter PV-Ertrag für heute in kWh.
+            z.B. sensor.energy_production_today (Forecast.Solar)
+            oder sensor.solcast_pv_forecast_forecast_today
+          default:
+          selector:
+            entity: {}
+
+        solar_forecast_sensor_2:
+          name: "Solar-Prognose Sensor 2 (optional)"
+          description: "Zweiter Forecast-Sensor (z.B. zweite Dachfläche). Wird addiert."
+          default:
+          selector:
+            entity: {}
+
+        solar_forecast_sensor_3:
+          name: "Solar-Prognose Sensor 3 (optional)"
+          description: "Dritter Forecast-Sensor. Wird ebenfalls addiert."
+          default:
+          selector:
+            entity: {}
+
+        forecast_good_threshold:
+          name: "Schwellwert 'gute Prognose' (kWh)"
+          description: >
+            Ab diesem Tageswert gilt die Prognose als gut → Ladebeginn erst
+            später (charge_start_hour_good). Darunter → früherer Start.
+          default: 15
+          selector:
+            number:
+              min: 1
+              max: 60
+              step: 1
+              unit_of_measurement: "kWh"
+
+    # =========================================================================
+    # WETTER
+    # =========================================================================
+    section_weather:
+      name: "🌤️ Wetter (optional)"
+      icon: mdi:weather-partly-cloudy
+      collapsed: true
+      input:
+
+        weather_entity:
+          name: "Wetter Entity (optional)"
+          description: "z.B. weather.forecast_home"
+          default:
+          selector:
+            entity:
+              filter:
+                - domain: weather
+
+        cloud_cover_sensor:
+          name: "Bewölkung Sensor in % (optional)"
+          description: >
+            Direkter Sensor mit Bewölkungsgrad 0–100%. Hat Vorrang vor
+            der Wetter-Entity.
+          default:
+          selector:
+            entity: {}
+
+    # =========================================================================
+    # E-AUTO / WALLBOX
+    # =========================================================================
+    section_ev:
+      name: "🚗 E-Auto & Wallbox (optional)"
+      icon: mdi:car-electric
+      collapsed: true
+      input:
+
+        wallbox_power_sensor:
+          name: "Wallbox Ladeleistung (optional)"
+          description: "Aktuelle Ladeleistung der Wallbox in Watt."
+          default:
+          selector:
+            entity:
+              filter:
+                - device_class: power
+
+        wallbox_soc_sensor:
+          name: "Wallbox – Fahrzeug SOC (optional)"
+          description: >
+            SOC des angeschlossenen Fahrzeugs von der Wallbox.
+            Hat Vorrang vor den einzelnen Fahrzeug-SOC-Sensoren.
+          default:
+          selector:
+            entity:
+              filter:
+                - device_class: battery
+
+        ev1_charging_power_sensor:
+          name: "Fahrzeug 1 – Ladeleistung (optional)"
+          default:
+          selector:
+            entity:
+              filter:
+                - device_class: power
+
+        ev1_soc_sensor:
+          name: "Fahrzeug 1 – SOC (optional)"
+          default:
+          selector:
+            entity:
+              filter:
+                - device_class: battery
+
+        ev2_charging_power_sensor:
+          name: "Fahrzeug 2 – Ladeleistung (optional)"
+          default:
+          selector:
+            entity:
+              filter:
+                - device_class: power
+
+        ev2_soc_sensor:
+          name: "Fahrzeug 2 – SOC (optional)"
+          default:
+          selector:
+            entity:
+              filter:
+                - device_class: battery
+
+        ev_target_soc:
+          name: "E-Auto Ziel-SOC (%)"
+          description: >
+            Ab diesem SOC gilt das E-Auto als ausreichend geladen –
+            Speicher bekommt wieder volle Priorität.
+          default: 80
+          selector:
+            number:
+              min: 20
+              max: 100
+              step: 5
+              unit_of_measurement: "%"
+
+    # =========================================================================
+    # LADEKURVE & TIMING
+    # =========================================================================
+    section_charge_curve:
+      name: "⏱️ Ladekurve & Timing"
+      icon: mdi:chart-bell-curve-cumulative
+      collapsed: false
+      input:
+
+        charge_start_hour_good:
+          name: "Aktives Laden: Beginn bei guter Prognose (Stunde)"
+          description: >
+            Früheste Zeit für aktives Laden (MM=0) wenn PV-Prognose gut ist.
+            Außerhalb dieser Zeit: MM=1, PID regelt. Standard: 10 Uhr
+          default: 10
+          selector:
+            number:
+              min: 6
+              max: 14
+              step: 1
+              unit_of_measurement: "h"
+
+        charge_start_hour_poor:
+          name: "Aktives Laden: Beginn bei schlechter Prognose (Stunde)"
+          description: "Standard: 8 Uhr"
+          default: 8
+          selector:
+            number:
+              min: 6
+              max: 12
+              step: 1
+              unit_of_measurement: "h"
+
+        charge_peak_hour:
+          name: "Ladekurven-Peak (Stunde)"
+          description: "Tageszeit mit maximaler Ladeleistung. Standard: 13 Uhr"
+          default: 13
+          selector:
+            number:
+              min: 10
+              max: 15
+              step: 1
+              unit_of_measurement: "h"
+
+        charge_end_hour:
+          name: "Aktives Laden: Ende (Stunde)"
+          description: >
+            Ab dieser Uhrzeit kein aktives Laden mehr (MM=0).
+            Der PID übernimmt wieder. Standard: 17 Uhr
+          default: 17
+          selector:
+            number:
+              min: 14
+              max: 20
+              step: 1
+              unit_of_measurement: "h"
+
+        curve_aggressiveness:
+          name: "Kurven-Aggressivität (1–5)"
+          description: >
+            1 = sanfter linearer Anstieg zum Peak.
+            5 = schnell auf Maximum, lange auf Volllast.
+          default: 3
+          selector:
+            number:
+              min: 1
+              max: 5
+              step: 1
+
+        soc_throttle_threshold:
+          name: "SOC-Drosselungsschwelle (%)"
+          description: >
+            Ab diesem SOC wird die aktive Ladeleistung linear auf 0 gedrosselt.
+            Unterhalb: volle Kurvenleistung. Standard: 80%
+          default: 80
+          selector:
+            number:
+              min: 50
+              max: 95
+              step: 5
+              unit_of_measurement: "%"
+
+        update_interval_minutes:
+          name: "Aktualisierungsintervall (Minuten)"
+          description: "Wie oft die Ladeleistung neu berechnet wird."
+          default: 5
+          selector:
+            number:
+              min: 1
+              max: 30
+              step: 1
+              unit_of_measurement: "min"
+
+    # =========================================================================
+    # NACHT-RESERVE
+    # =========================================================================
+    section_reserve:
+      name: "🌙 Nacht-Reserve"
+      icon: mdi:battery-lock
+      collapsed: true
+      input:
+
+        discharge_reserve_soc:
+          name: "Nacht-Reserve SOC (%)"
+          description: >
+            Der PID darf den Speicher nicht unter diesen SOC entladen.
+            Wird durch den SI-Wert des Geräts ergänzt (der höhere Wert gilt).
+            0 = nur Gerät-SI als Limit. Standard: 15%
+          default: 15
+          selector:
+            number:
+              min: 0
+              max: 50
+              step: 5
+              unit_of_measurement: "%"
+
+# =============================================================================
+# VARIABLEN
+# =============================================================================
+variables:
+  _soc_sensor:        !input battery_soc_sensor
+  _gs_number:         !input battery_gs_number
+  _is_number:         !input battery_is_number
+  _mm_switch:         !input battery_mm_switch
+  _sa_number:         !input battery_sa_number
+  _si_number:         !input battery_si_number
+  _pv_sensor:         !input pv_power_sensor
+  _grid_sensor:       !input grid_power_sensor
+  _base_load:         !input house_base_load
+  _min_surplus:       !input min_surplus_to_charge
+  _fc1:               !input solar_forecast_sensor_1
+  _fc2:               !input solar_forecast_sensor_2
+  _fc3:               !input solar_forecast_sensor_3
+  _fc_good_thresh:    !input forecast_good_threshold
+  _weather:           !input weather_entity
+  _cloud_sensor:      !input cloud_cover_sensor
+  _wb_power:          !input wallbox_power_sensor
+  _wb_soc:            !input wallbox_soc_sensor
+  _ev1_power:         !input ev1_charging_power_sensor
+  _ev1_soc:           !input ev1_soc_sensor
+  _ev2_power:         !input ev2_charging_power_sensor
+  _ev2_soc:           !input ev2_soc_sensor
+  _ev_target_soc:     !input ev_target_soc
+  _start_good:        !input charge_start_hour_good
+  _start_poor:        !input charge_start_hour_poor
+  _peak_hour:         !input charge_peak_hour
+  _end_hour:          !input charge_end_hour
+  _aggressiveness:    !input curve_aggressiveness
+  _soc_throttle:      !input soc_throttle_threshold
+  _dis_reserve_soc:   !input discharge_reserve_soc
+
+# =============================================================================
+# TRIGGER
+# =============================================================================
+trigger:
+  # Regelmäßige Neuberechnung
+  - platform: time_pattern
+    minutes: !input update_interval_minutes
+
+  # Sofortige Reaktion wenn E-Auto Ladestatus sich ändert
+  - platform: state
+    entity_id: !input wallbox_power_sensor
+  - platform: state
+    entity_id: !input ev1_charging_power_sensor
+  - platform: state
+    entity_id: !input ev2_charging_power_sensor
+
+  # Phasenübergänge zu definierten Uhrzeiten
+  - platform: sun
+    event: sunrise
+    offset: "00:30:00"
+  - platform: sun
+    event: sunset
+
+  # HA-Neustart → sicherer Zustand
+  - platform: homeassistant
+    event: start
+
+# =============================================================================
+# ACTION
+# =============================================================================
+action:
+  # ---------------------------------------------------------------------------
+  # SCHRITT 1: Alle Werte berechnen
+  # ---------------------------------------------------------------------------
+  - variables:
+      current_hour: "{{ now().hour + now().minute / 60.0 }}"
+
+      # SOC-Grenzen
+      soc_max: >
+        {% if _sa_number and states(_sa_number) not in ['unknown','unavailable'] %}
+          {{ states(_sa_number) | float(100) }}
+        {% else %}
+          100
+        {% endif %}
+      soc_min: >
+        {% if _si_number and states(_si_number) not in ['unknown','unavailable'] %}
+          {{ states(_si_number) | float(10) }}
+        {% else %}
+          10
+        {% endif %}
+      soc_current:  "{{ states(_soc_sensor) | float(0) }}"
+
+      # Hardware-Limit
+      is_max: "{{ states(_is_number) | float(800) }}"
+
+      # PV & Netz
+      pv_now:   "{{ states(_pv_sensor)   | float(0) }}"
+      grid_now: "{{ states(_grid_sensor) | float(0) }}"
+      # grid_now > 0 = Einspeisung (Überschuss), grid_now < 0 = Bezug (Bedarf)
+
+      # E-Auto (Wallbox hat Vorrang)
+      ev_power_total: >
+        {% set wb = states(_wb_power)  | float(0) if _wb_power  else 0 %}
+        {% set e1 = states(_ev1_power) | float(0) if _ev1_power else 0 %}
+        {% set e2 = states(_ev2_power) | float(0) if _ev2_power else 0 %}
+        {{ wb if wb > 0 else (e1 + e2) }}
+
+      ev_soc_current: >
+        {% if _wb_soc and states(_wb_soc) not in ['unknown','unavailable'] %}
+          {{ states(_wb_soc) | float(100) }}
+        {% elif _ev1_power and states(_ev1_power) | float(0) > 50 and _ev1_soc %}
+          {{ states(_ev1_soc) | float(100) }}
+        {% elif _ev2_power and states(_ev2_power) | float(0) > 50 and _ev2_soc %}
+          {{ states(_ev2_soc) | float(100) }}
+        {% else %}
+          100
+        {% endif %}
+
+      ev_needs_priority: >
+        {{ ev_power_total > 50 and ev_soc_current < _ev_target_soc }}
+
+      # Solar-Prognose
+      forecast_today_kwh: >
+        {% set f1 = states(_fc1) | float(0) if _fc1 else 0 %}
+        {% set f2 = states(_fc2) | float(0) if _fc2 else 0 %}
+        {% set f3 = states(_fc3) | float(0) if _fc3 else 0 %}
+        {{ f1 + f2 + f3 }}
+
+      forecast_is_good:   "{{ forecast_today_kwh >= _fc_good_thresh }}"
+      charge_start_hour:  "{{ _start_good if forecast_is_good else _start_poor }}"
+
+      # Bewölkung
+      cloud_cover: >
+        {% if _cloud_sensor and states(_cloud_sensor) not in ['unknown','unavailable'] %}
+          {{ states(_cloud_sensor) | float(0) }}
+        {% elif _weather and states(_weather) not in ['unknown','unavailable'] %}
+          {% set cond = state_attr(_weather, 'condition') | default('') %}
+          {% if   cond in ['sunny','clear-night']            %}0
+          {% elif cond in ['partlycloudy']                   %}35
+          {% elif cond in ['cloudy']                         %}70
+          {% elif cond in ['rainy','pouring','snowy','fog']  %}90
+          {% else                                            %}50
+          {% endif %}
+        {% else %}
+          0
+        {% endif %}
+
+      weather_factor: >
+        {{ [1.0 - (cloud_cover | float(0) / 100.0 * 0.75), 0.1] | max | round(4) }}
+
+      # ------------------------------------------------------------------
+      # LADEKURVE: Glockenkurve t^(1/a)
+      # Aufstieg von charge_start → peak, Abstieg von peak → charge_end
+      # ------------------------------------------------------------------
+      curve_factor: >
+        {% set h      = current_hour %}
+        {% set t_s    = charge_start_hour | float %}
+        {% set t_p    = _peak_hour | float %}
+        {% set t_e    = _end_hour  | float %}
+        {% set a      = _aggressiveness | float(3) %}
+        {% if h < t_s or h >= t_e %}
+          0.0
+        {% elif h <= t_p %}
+          {{ ((h - t_s) / (t_p - t_s)) ** (1.0 / a) | round(4) }}
+        {% else %}
+          {{ ((t_e - h) / (t_e - t_p)) ** (1.0 / a) | round(4) }}
+        {% endif %}
+
+      # ------------------------------------------------------------------
+      # SOC-Drosselung: lineare Reduktion zwischen Schwelle und soc_max
+      # ------------------------------------------------------------------
+      soc_factor: >
+        {% set s     = soc_current | float %}
+        {% set s_max = soc_max     | float %}
+        {% set s_thr = _soc_throttle | float %}
+        {% if s >= s_max %}
+          0.0
+        {% elif s >= s_thr %}
+          {{ (0.5 * (s_max - s) / [s_max - s_thr, 1] | max) | round(4) }}
+        {% else %}
+          1.0
+        {% endif %}
+
+      # ------------------------------------------------------------------
+      # Verfügbarer Überschuss am Netzanschluss
+      # Basis: grid_now (positiv = echter Überschuss)
+      # Abzug Grundlast & E-Auto wenn nötig
+      # ------------------------------------------------------------------
+      ev_deduction: "{{ ev_power_total if ev_needs_priority else 0 }}"
+
+      # Primär: echter Netz-Überschuss abzüglich E-Auto-Priorität
+      # Fallback: PV - Grundlast - E-Auto (wenn kein Grid-Sensor konfiguriert)
+      available_surplus: >
+        {% set grid_surplus = grid_now - ev_deduction %}
+        {% set pv_surplus   = pv_now - _base_load - ev_deduction %}
+        {{ [grid_surplus, 0] | max }}
+
+      # ------------------------------------------------------------------
+      # Ziel-Ladeleistung (alle Faktoren kombiniert)
+      # ------------------------------------------------------------------
+      target_charge_power: >
+        {% set raw     = available_surplus * curve_factor * soc_factor * weather_factor %}
+        {% set limited = [raw, is_max] | min %}
+        {{ 0 if limited < _min_surplus else (limited | round(0) | int) }}
+
+      gs_value: "{{ -(target_charge_power | int) }}"
+
+      # ------------------------------------------------------------------
+      # BETRIEBSMODUS entscheiden
+      #
+      # active_charge: Alle Bedingungen für aktives Laden erfüllt
+      #   - Innerhalb Ladezeit
+      #   - Kurve > 0
+      #   - Genug Überschuss
+      #   - SOC nicht voll
+      #   - Netzanschluss zeigt Überschuss (grid_now > 0) ODER
+      #     berechnete Zielleistung > 0
+      #
+      # pid_mode: Alle anderen Situationen
+      #   - Tagsüber bei Netzbezug → PID entlädt Speicher
+      #   - Abends → PID entlädt bedarfsgerecht
+      #   - Nachts → Ruhezustand
+      #   - Neustart → sicherer Zustand
+      #   - SOC unter Reserve → kein Entladen durch uns
+      # ------------------------------------------------------------------
+      operating_mode: >
+        {% set in_charge_window = current_hour >= (charge_start_hour | float)
+                               and current_hour < (_end_hour | float) %}
+        {% set has_surplus      = target_charge_power > 0 %}
+        {% set soc_ok           = soc_current < soc_max %}
+        {% set above_reserve    = soc_current > _dis_reserve_soc %}
+        {% if in_charge_window and has_surplus and soc_ok %}
+          active_charge
+        {% else %}
+          pid_mode
+        {% endif %}
+
+  # ---------------------------------------------------------------------------
+  # SCHRITT 2: Modus ausführen
+  # ---------------------------------------------------------------------------
+  - choose:
+
+      # ════════════════════════════════════════════════════════════════════════
+      # AKTIVES LADEN: MM=0, GS=negativ
+      # Wir erzwingen das Laden nach der Glockenkurve
+      # ════════════════════════════════════════════════════════════════════════
+      - conditions:
+          - condition: template
+            value_template: "{{ operating_mode == 'active_charge' }}"
+        sequence:
+          - service: switch.turn_off
+            target:
+              entity_id: !input battery_mm_switch
+          - service: number.set_value
+            target:
+              entity_id: !input battery_gs_number
+            data:
+              value: "{{ gs_value }}"
+          - service: system_log.write
+            data:
+              message: >
+                [SunEnergyXT] AKTIVES LADEN |
+                {{ now().strftime('%H:%M') }} |
+                SOC: {{ soc_current }}% / max: {{ soc_max }}% |
+                PV: {{ pv_now }}W | Grid: {{ grid_now }}W |
+                EV: {{ ev_power_total }}W (Prio: {{ ev_needs_priority }}) |
+                Prognose: {{ forecast_today_kwh }}kWh |
+                Bewölkung: {{ cloud_cover }}% (Faktor: {{ weather_factor }}) |
+                Kurve: {{ curve_factor }} | SOC-Faktor: {{ soc_factor }} |
+                Überschuss: {{ available_surplus }}W → GS: {{ gs_value }}W
+              level: debug
+
+      # ════════════════════════════════════════════════════════════════════════
+      # PID-MODUS: MM=1, GS=0
+      # Gilt für: Netzbezug tagsüber, Entladen abends, Nacht, Neustart
+      # Der interne PID regelt auf Nulleinspeisung –
+      # entlädt bei Bedarf, lädt bei Überschuss, alles automatisch
+      # ════════════════════════════════════════════════════════════════════════
+    default:
+      - service: number.set_value
+        target:
+          entity_id: !input battery_gs_number
+        data:
+          value: 0
+      - service: switch.turn_on
+        target:
+          entity_id: !input battery_mm_switch
+      - service: system_log.write
+        data:
+          message: >
+            [SunEnergyXT] PID-MODUS (MM=1, GS=0) |
+            {{ now().strftime('%H:%M') }} |
+            SOC: {{ soc_current }}% |
+            PV: {{ pv_now }}W | Grid: {{ grid_now }}W |
+            Grund: {% if current_hour < (charge_start_hour | float) %}vor Ladezeit
+            {%- elif current_hour >= (_end_hour | float) %}nach Ladezeit
+            {%- elif soc_current >= soc_max %}Speicher voll
+            {%- elif target_charge_power == 0 %}kein Überschuss / kein Bedarf
+            {%- else %}sonstige Bedingung{% endif %}
+          level: debug
+
+mode: single
+max_exceeded: silent
