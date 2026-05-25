@@ -196,9 +196,6 @@
             "pb": {
                 "name": "Battery Power"
             },
-            "pd": {
-                "name": "Today's PV Energy"
-            },
             "bn": {
                 "name": "Total Battery Pack Count"
             },
@@ -207,9 +204,6 @@
             },
             "uo": {
                 "name": "UPS Mode"
-            },
-            "up": {
-                "name": "UPS PV Bypass Power"
             },
             "ug": {
                 "name": "UPS Grid Charge Power"
@@ -257,9 +251,6 @@
             },
             "pt": {
                 "name": "System Auto-Shutdown Time Setting"
-            },
-            "up": {
-                "name": "UPS PV Bypass Power"
             },
             "ug": {
                 "name": "UPS Grid Charge Power"
