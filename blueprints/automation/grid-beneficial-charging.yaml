@@ -1,7 +1,7 @@
 blueprint:
   name: "SunEnergyXT – Grid-Beneficial Charging & Discharging"
   description: >
-    **Version 2.0.0**
+    **Version 2.0.1**
 
     Controls the SunEnergyXT battery storage using three selectable modes
     via a charging mode entity (input_select):
@@ -490,21 +490,6 @@ blueprint:
               step: 5
               unit_of_measurement: "%"
 
-        update_interval_minutes:
-          name: "Aktualisierungsintervall (Minuten)"
-          description: >
-            Maximales Intervall zwischen zwei Neuberechnungen.
-            Zusätzlich reagiert der Blueprint sofort auf Änderungen am
-            Netzanschluss (Grid-Sensor Schwellwert-Trigger).
-            Standard: 2 Minuten – empfohlen für kleine Anlagen / Speicher.
-          default: 2
-          selector:
-            number:
-              min: 1
-              max: 30
-              step: 1
-              unit_of_measurement: "min"
-
         grid_trigger_threshold:
           name: "Grid-Trigger Schwellwert (Watt)"
           description: >
@@ -707,7 +692,7 @@ variables:
 trigger:
   # Regelmäßige Neuberechnung (Fallback / Maximalintervall)
   - platform: time_pattern
-    minutes: !input update_interval_minutes
+    minutes: "/2"
 
   # Ereignisbasiert: sofortige Reaktion auf Überschuss-Änderungen
   # Überschuss steigt über Schwellwert → Laden starten/erhöhen
