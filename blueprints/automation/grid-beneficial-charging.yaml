@@ -1,7 +1,7 @@
 blueprint:
   name: "SunEnergyXT – Grid-Beneficial Charging & Discharging"
   description: >
-    **Version 2.0.1**
+    **Version 2.1.0**
 
     Controls the SunEnergyXT battery storage using three selectable modes
     via a charging mode entity (input_select):
@@ -880,20 +880,26 @@ action:
         {{ [1.0 - (cloud_cover | float(0) / 100.0 * 0.75), 0.1] | max | round(4) }}
 
       # ------------------------------------------------------------------
-      # LADEKURVE: Glockenkurve t^(1/a)
+      # LADEKURVE: Konvexe S-Kurve t^a (langsamer Aufstieg, netzdienlich)
+      # Aufstieg: t^a → morgens kaum laden, zum Peak voll
+      # Nach Peak: konstant 1.0 → SOC-Faktor übernimmt die Drosselung
+      # Aggressivität: höher = flacherer Aufstieg (Standard 3)
+      #   a=2: 09:00→4%, 11:00→36%, 12:00→64%
+      #   a=3: 09:00→1%, 11:00→22%, 12:00→51%
+      #   a=4: 09:00→0%, 11:00→10%, 12:00→41%
       # ------------------------------------------------------------------
       curve_factor: >
-        {% set h      = current_hour %}
-        {% set t_s    = charge_start_hour | float %}
-        {% set t_p    = _peak_hour | float %}
-        {% set t_e    = _end_hour  | float %}
-        {% set a      = _aggressiveness | float(3) %}
+        {% set h   = current_hour %}
+        {% set t_s = charge_start_hour | float %}
+        {% set t_p = _peak_hour | float %}
+        {% set t_e = _end_hour  | float %}
+        {% set a   = _aggressiveness | float(3) %}
         {% if h < t_s or h >= t_e %}
           0.0
         {% elif h <= t_p %}
-          {{ ((h - t_s) / (t_p - t_s)) ** (1.0 / a) | round(4) }}
+          {{ ((h - t_s) / (t_p - t_s)) ** a | round(4) }}
         {% else %}
-          {{ ((t_e - h) / (t_e - t_p)) ** (1.0 / a) | round(4) }}
+          1.0
         {% endif %}
 
       # ------------------------------------------------------------------
