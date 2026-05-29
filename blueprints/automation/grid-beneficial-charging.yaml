@@ -1,7 +1,7 @@
 blueprint:
   name: "SunEnergyXT – Grid-Beneficial Charging & Discharging"
   description: >
-    **Version 1.4.3**
+    **Version 1.4.4**
 
     Controls the SunEnergyXT battery storage in a grid-beneficial way using
     two operating modes:
@@ -643,12 +643,15 @@ action:
         {# Priorität 2: Sonnenscheindauer-Sensor + Anlagendaten #}
         {% elif _sun_duration and _pv_peak_kw | float(0) > 0
              and state_attr(_sun_duration, 'data') is not none %}
-          {% set data = state_attr(_sun_duration, 'data') %}
-          {% set eff  = _pv_efficiency | float(80) / 100.0 %}
-          {% set peak = _pv_peak_kw | float(0) %}
-          {% set ns   = namespace(total=0.0) %}
+          {% set data  = state_attr(_sun_duration, 'data') %}
+          {% set eff   = _pv_efficiency | float(80) / 100.0 %}
+          {% set peak  = _pv_peak_kw | float(0) %}
+          {% set today = now().date() | string %}
+          {% set ns    = namespace(total=0.0) %}
           {% for entry in data %}
-            {% set ns.total = ns.total + (entry.value | float(0) / 3600.0 * peak * eff) %}
+            {% if entry.datetime[:10] == today %}
+              {% set ns.total = ns.total + (entry.value | float(0) / 3600.0 * peak * eff) %}
+            {% endif %}
           {% endfor %}
           {{ ns.total | round(2) }}
 
