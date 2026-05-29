@@ -1,14 +1,14 @@
 blueprint:
   name: "SunEnergyXT – Grid-Beneficial Charging & Discharging"
   description: >
-    **Version 2.1.0**
+    **Version 2.2.0**
 
     Controls the SunEnergyXT battery storage using three selectable modes
     via a charging mode entity (input_select):
 
-    **Grid-Beneficial (Netzdienlich):** Charges following a bell curve during
-    the day, driven by PV surplus, forecast, SOC and weather. PID mode handles
-    all other situations (discharging on demand, evening, night, restart).
+    **Grid-Beneficial (Netzdienlich):** Charges following a bell curve starting
+    as soon as PV production begins. Charging power is capped at actual PV
+    surplus – no grid charging. PID mode handles discharging, evening and night.
                             
 
     **Price-Optimized (Preisoptimiert):** Charges from the grid during cheap
@@ -254,7 +254,7 @@ blueprint:
           name: "Schwellwert 'gute Prognose' (kWh)"
           description: >
             Ab diesem Tageswert gilt die Prognose als gut → Ladebeginn erst
-            später (charge_start_hour_good). Darunter → früherer Start.
+            später (Kurve startet flacher). Darunter → aggressiverer Kurvenanstieg.
           default: 15
           selector:
             number:
@@ -416,30 +416,6 @@ blueprint:
       icon: mdi:chart-bell-curve-cumulative
       collapsed: false
       input:
-
-        charge_start_hour_good:
-          name: "Aktives Laden: Beginn bei guter Prognose (Stunde)"
-          description: >
-            Früheste Zeit für aktives Laden (MM=0) wenn PV-Prognose gut ist.
-            Außerhalb dieser Zeit: MM=1, PID regelt. Standard: 10 Uhr
-          default: 10
-          selector:
-            number:
-              min: 6
-              max: 14
-              step: 1
-              unit_of_measurement: "h"
-
-        charge_start_hour_poor:
-          name: "Aktives Laden: Beginn bei schlechter Prognose (Stunde)"
-          description: "Standard: 8 Uhr"
-          default: 8
-          selector:
-            number:
-              min: 6
-              max: 12
-              step: 1
-              unit_of_measurement: "h"
 
         charge_peak_hour:
           name: "Ladekurven-Peak (Stunde)"
@@ -665,8 +641,6 @@ variables:
   _ev2_power:         !input ev2_charging_power_sensor
   _ev2_soc:           !input ev2_soc_sensor
   _ev_target_soc:     !input ev_target_soc
-  _start_good:        !input charge_start_hour_good
-  _start_poor:        !input charge_start_hour_poor
   _peak_hour:         !input charge_peak_hour
   _end_hour:          !input charge_end_hour
   _aggressiveness:    !input curve_aggressiveness
@@ -708,6 +682,11 @@ trigger:
   # Sofortige Reaktion bei Moduswechsel
   - platform: state
     entity_id: !input charging_mode_entity
+
+  # PV-Start: sobald Anlage produziert → aktives Laden beginnt
+  - platform: numeric_state
+    entity_id: !input pv_power_sensor
+    above: 0
 
   # Stündlicher Trigger für Preisänderungen
   - platform: time_pattern
@@ -762,7 +741,7 @@ action:
       battery_capacity_kwh: "{{ battery_modules * 5.0 }}"
 
       # Ladezeit-Fenster in Stunden (Peak als Scheitelpunkt)
-      charge_window_hours: "{{ [(_end_hour | float) - (_start_good | float), 1] | max }}"
+      charge_window_hours: "{{ [(_end_hour | float) - current_hour, 1] | max }}"
 
       # Kapazitätsbasierte Mindest-Ladeleistung:
       # Wie viel W brauchen wir im Schnitt um den Speicher im Fenster zu füllen?
@@ -843,12 +822,15 @@ action:
         {# Priorität 2: Sonnenscheindauer-Sensor + Anlagendaten #}
         {% elif _sun_duration and _pv_peak_kw | float(0) > 0
              and state_attr(_sun_duration, 'data') is not none %}
-          {% set data = state_attr(_sun_duration, 'data') %}
-          {% set eff  = _pv_efficiency | float(80) / 100.0 %}
-          {% set peak = _pv_peak_kw | float(0) %}
-          {% set ns   = namespace(total=0.0) %}
+          {% set data  = state_attr(_sun_duration, 'data') %}
+          {% set eff   = _pv_efficiency | float(80) / 100.0 %}
+          {% set peak  = _pv_peak_kw | float(0) %}
+          {% set today = now().date() | string %}
+          {% set ns    = namespace(total=0.0) %}
           {% for entry in data %}
-            {% set ns.total = ns.total + (entry.value | float(0) / 3600.0 * peak * eff) %}
+            {% if entry.datetime[:10] == today %}
+              {% set ns.total = ns.total + (entry.value | float(0) / 3600.0 * peak * eff) %}
+            {% endif %}
           {% endfor %}
           {{ ns.total | round(2) }}
 
@@ -857,8 +839,8 @@ action:
           0
         {% endif %}
 
-      forecast_is_good:   "{{ forecast_today_kwh >= _fc_good_thresh }}"
-      charge_start_hour:  "{{ _start_good if forecast_is_good else _start_poor }}"
+      # Ladestart: sobald PV produziert – kein fixer Zeitpunkt mehr
+      charge_start_hour:  "{{ now().hour + now().minute / 60 if pv_now > 0 else 24 }}"
 
       # Bewölkung
       cloud_cover: >
@@ -890,14 +872,13 @@ action:
       # ------------------------------------------------------------------
       curve_factor: >
         {% set h   = current_hour %}
-        {% set t_s = charge_start_hour | float %}
         {% set t_p = _peak_hour | float %}
         {% set t_e = _end_hour  | float %}
         {% set a   = _aggressiveness | float(3) %}
-        {% if h < t_s or h >= t_e %}
+        {% if pv_now <= 0 or h >= t_e %}
           0.0
         {% elif h <= t_p %}
-          {{ ((h - t_s) / (t_p - t_s)) ** a | round(4) }}
+          {{ (((h) / (t_p)) ** a) | round(4) }}
         {% else %}
           1.0
         {% endif %}
@@ -928,11 +909,13 @@ action:
         {% set limited = [raw, is_max] | min %}
         {{ 0 if limited < _min_surplus else (limited | round(0) | int) }}
 
+      # Ladeleistung für Netzdienlich auf PV-Überschuss begrenzen → kein Netzladen
+      pv_surplus_cap: "{{ [pv_now | float(0) - (_base_load | float(0)), 0] | max | int }}"
       gs_value: >
         {% if operating_mode == 'active_charge_price' %}
           {{ -(target_charge_power_price | int) }}
         {% elif operating_mode == 'active_charge_grid_beneficial' %}
-          {{ -(target_charge_power | int) }}
+          {{ -([ target_charge_power, pv_surplus_cap ] | min | int) }}
         {% else %}
           0
         {% endif %}
@@ -944,7 +927,7 @@ action:
         {% set has_surplus = target_charge_power > 0 %}
 
         {% if active_mode == 'Netzdienlich' %}
-          {% if in_window and has_surplus and soc_ok %}
+          {% if pv_now > 0 and current_hour < (_end_hour | float) and has_surplus and soc_ok %}
             active_charge_grid_beneficial
           {% else %}
             pid_mode
@@ -960,7 +943,7 @@ action:
         {% elif active_mode == 'Kombiniert' %}
           {% if price_is_cheap and price_soc_ok and soc_ok %}
             active_charge_price
-          {% elif in_window and has_surplus and soc_ok %}
+          {% elif pv_now > 0 and current_hour < (_end_hour | float) and has_surplus and soc_ok %}
             active_charge_grid_beneficial
           {% else %}
             pid_mode
@@ -982,7 +965,7 @@ action:
       # ════════════════════════════════════════════════════════════════════════
       - conditions:
           - condition: template
-            value_template: "{{ operating_mode == 'active_charge' }}"
+            value_template: "{{ operating_mode in ['active_charge_grid_beneficial', 'active_charge_price'] }}"
         sequence:
           - service: switch.turn_off
             target:
@@ -1005,8 +988,10 @@ action:
                 Prognose: {{ forecast_today_kwh }}kWh |
                 Bewölkung: {{ cloud_cover }}% (Faktor: {{ weather_factor }}) |
                 Kurve: {{ curve_factor }} | SOC-Faktor: {{ soc_factor }} |
-                Überschuss: {{ available_surplus }}W → GS: {{ gs_value }}W
+                Modus: {{ active_mode }} |
+                Überschuss: {{ available_surplus }}W | PV-Cap: {{ pv_surplus_cap }}W → GS: {{ gs_value }}W
               level: debug
+              logger: custom_components.sunenergyxt.blueprint
 
       # ════════════════════════════════════════════════════════════════════════
       # PID-MODUS: MM=1, GS=0
@@ -1032,12 +1017,13 @@ action:
               {%- if not price_is_cheap %}Preis nicht günstig
               {%- elif not price_soc_ok %}SOC-Ziel erreicht ({{ soc_current }}% ≥ {{ _price_soc_target }}%)
               {%- else %}SOC voll{% endif %}
-            {%- elif current_hour < (charge_start_hour | float) %}vor Ladezeit
+            {%- elif not (pv_now > 0) %}kein PV (Nacht / früh morgens)
             {%- elif current_hour >= (_end_hour | float) %}nach Ladezeit
             {%- elif soc_current >= soc_max %}Speicher voll
             {%- elif target_charge_power == 0 %}kein Überschuss
             {%- else %}sonstige Bedingung{% endif %}
           level: debug
+          logger: custom_components.sunenergyxt.blueprint
 
 mode: single
 max_exceeded: silent
