@@ -1,7 +1,7 @@
 blueprint:
   name: "SunEnergyXT – Grid-Beneficial Charging & Discharging"
   description: >
-    **Version 1.4.2**
+    **Version 1.4.3**
 
     Controls the SunEnergyXT battery storage in a grid-beneficial way using
     two operating modes:
@@ -591,7 +591,8 @@ action:
       battery_capacity_kwh: "{{ battery_modules * 5.0 }}"
 
       # Ladezeit-Fenster in Stunden (Peak als Scheitelpunkt)
-      charge_window_hours: "{{ [(_end_hour | float) - (_start_good | float), 1] | max }}"
+      # Verbleibendes Ladefenster ab jetzt bis charge_end_hour
+      charge_window_hours: "{{ [(_end_hour | float) - current_hour, 1] | max }}"
 
       # Kapazitätsbasierte Mindest-Ladeleistung:
       # Wie viel W brauchen wir im Schnitt um den Speicher im Fenster zu füllen?
