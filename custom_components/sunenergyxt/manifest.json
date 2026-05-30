@@ -2,21 +2,21 @@
     "domain": "sunenergyxt",
     "name": "SunEnergyXT 500 Series",
     "codeowners": [
-        "@GLORYFeonix"
+        "@Christoph Caina"
     ],
     "config_flow": true,
     "dependencies": [],
-    "documentation": "https://github.com/GLORYFeonix/SunEnergyXT_500_Series",
+    "documentation": "https://github.com/ChristophCaina/SunEnergyXT_500_Series",
     "integration_type": "device",
     "iot_class": "local_polling",
-    "issue_tracker":"https://github.com/GLORYFeonix/SunEnergyXT_500_Series/issues",
+    "issue_tracker":"https://github.com/ChristophCaina/SunEnergyXT_500_Series/issues",
     "loggers": [
         "custom_components.sunenergyxt"
     ],
     "requirements": [
         "aiohttp"
     ],
-    "version": "0.0.1",
+    "version": "0.1.0",
     "zeroconf": [
         {
             "type": "_http._tcp.local."
