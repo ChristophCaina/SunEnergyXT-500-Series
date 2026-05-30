@@ -9,6 +9,10 @@
 - [Deutsch](README.md) (Standard)
 - [English](README.en.md)
 
+## Blueprints
+
+- [Netzdienliches Lademanagement (DE)](/blueprints/readme.md)
+
 ## Einfuehrung
 
 SunEnergyXT 500 Series ist eine benutzerdefinierte Integration fuer Home Assistant. Sie ermoeglicht das Auffinden, Ueberwachen und Steuern von AIO-Geraeten der SunEnergyXT 500-Serie im lokalen Netzwerk.
