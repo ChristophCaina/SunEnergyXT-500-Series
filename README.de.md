@@ -9,6 +9,10 @@
 - [Deutsch](README.md) (Standard)
 - [English](README.en.md)
 
+## Blueprints
+
+- [Netzdienliches Lademanagement (DE)](/blueprints/readme.md)
+
 ## Einfuehrung
 
 SunEnergyXT 500 Series ist eine benutzerdefinierte Integration fuer Home Assistant. Sie ermoeglicht das Auffinden, Ueberwachen und Steuern von AIO-Geraeten der SunEnergyXT 500-Serie im lokalen Netzwerk.
@@ -83,7 +87,15 @@ Hinweise zur Nutzung:
 
 ## Automatische Eigenverbrauchsregelung ueber HA-Sensor
 
-Die Integration unterstuetzt eine optionale, herstellerunabhaengige Eigenverbrauchsregelung ueber einen beliebigen Home Assistant Leistungssensor.
+Die Integration unterstuetzt eine optionale, herstellerunabhaengige Eigenverbrauchsregelung ueber einen beliebigen Home Assistant Leistungssensor.  
+<img width="561" height="449" alt="grafik" src="https://github.com/user-attachments/assets/b439c8b6-c5b6-4e99-bd60-da3aaed401fe" />
+
+Option mit einem Sensor (Standard oder Invertiert)  
+<img width="601" height="780" alt="grafik" src="https://github.com/user-attachments/assets/bd69e3c8-774c-4c89-9822-392f9ed90067" />
+
+Option mit getrennten Sensoren für PV Einspeisung und Netzbezug  
+<img width="590" height="420" alt="grafik" src="https://github.com/user-attachments/assets/4388a593-b688-4c89-aae1-4d7140b563d1" />
+
 
 ### Wie funktioniert das?
 
@@ -103,6 +115,11 @@ Geraet (MM=1, MD=Proxy-URL)
         ↓
 Automatische Lade-/Entladeregelung
 ```
+<img width="639" height="205" alt="grafik" src="https://github.com/user-attachments/assets/b55928cd-479c-4378-bd6a-f6088dd5908a" />
+
+Automatisches Ausfüllen des Textfeldes **Lokales Zählerdatenformat**  
+<img width="244" height="86" alt="grafik" src="https://github.com/user-attachments/assets/973dcc91-9279-45f9-a7ae-3df93e0d947c" />
+
 
 ### Einrichtung
 
@@ -117,14 +134,32 @@ Nach der Konfiguration schreibt die Integration automatisch die `MD`-Verbindungs
 
 ### Vorzeichenkonvention
 
-Die Vorzeichenkonvention des gewaehlten Sensors muss mit der Geraete-API uebereinstimmen:
-
+#### Ein Sensor – Standard
 | Wert | Bedeutung |
 |------|-----------|
-| **Positiv** | Einspeisung ins Netz (Ueberschuss) |
+| **Positiv** | Einspeisung ins Netz (Überschuss) |
 | **Negativ** | Bezug aus dem Netz |
 
-> **Hinweis:** Pruefen Sie das Vorzeichen Ihres Sensors vor der Konfiguration. Viele Integrationen (z. B. SolarEdge Modbus Multi) liefern den Netzfluss bereits in dieser Konvention.
+#### Ein Sensor – Invertiert*
+| Wert | Bedeutung |
+|------|-----------|
+| **Positiv** | Bezug aus dem Netz |
+| **Negativ** | Einspeisung ins Netz (Überschuss) |
+
+#### Zwei Sensoren (Import + Export)*
+| Sensor | Wert | Bedeutung |
+|--------|------|-----------|
+| Import-Sensor | **Positiv** | Bezug aus dem Netz – Export-Sensor = 0 W |
+| Export-Sensor | **Positiv** | Einspeisung ins Netz – Import-Sensor = 0 W |
+
+Beispiel:
+- Überschuss 500 W: Import = 0 W, Export = 500 W → `500 - 0 = +500 W`
+- Netzbezug 300 W: Import = 300 W, Export = 0 W → `0 - 300 = -300 W`
+
+\* Die Integration wandelt die Sensoren automatisch in die für das Gerät gültige Konvention um.
+
+> **Hinweis:** Prüfen Sie das Vorzeichen Ihres Sensors vor der Konfiguration.
+> Viele Integrationen (z. B. SolarEdge Modbus Multi) liefern den Netzfluss bereits in der Standard-Konvention (positiv = Einspeisung).
 
 ### Beispiele fuer kompatible Sensoren
 
@@ -222,6 +257,33 @@ Hinweise:
 | Entitaets-ID | Name | Beschreibung |
 |--------------|------|--------------|
 | `RT` | Systemneustart | Sendet einen Neustartbefehl an das Geraet |
+
+## weitere Änderungen gegenüber der Original-Integration von SunEnergyXT
+
+### Neu-Konfiguration
+Die Integration unterstützt nun auch "Neu Konfigurieren", womit Änderungen für die Netz-Konfiguration möglich sind, ohne die Integration komplett neu einrichten zu müssen.  
+<img width="789" height="334" alt="grafik" src="https://github.com/user-attachments/assets/4fb9262d-5fc3-4805-a58b-d39f615b282b" />
+
+### Sensor-Klassifizierung und HomeAssistant Standards
+1. Alle Einheiten werden nun von HomeAssistant Konstanten abgeleitet (`UnitOfPower`, `UnitOfEnergy`, `UnitOfElectricCurrent`, `UnitOfElectricPotential`, `PERCENTAGE`, `SIGNAL_STRENGTH_DECIBELS`).  
+Dies ermoeglicht die Interne Konvertierung der Einheiten  
+<img width="488" height="475" alt="grafik" src="https://github.com/user-attachments/assets/3395ed70-614d-4934-bc4c-62504a388949" />
+
+2. `SensorDeviceClass` wurde für die Relevanten Sensoren hinzugefügt
+
+3. Alle Energie-Sensoren wurden mit Ihren `state_class` ausgestattet.  
+Diese sind: `TOTAL_INCREASING`, `MEASUREMENT` was die Integration in das EnergyDashboard und Langzeitstatistiken in HomeAssistant unterstützt.  
+<img width="566" height="468" alt="grafik" src="https://github.com/user-attachments/assets/f572daa3-337e-4f36-8d99-246ed9168313" />
+
+### Neu-Ordnung der Sensoren
+In der Ursprünglichen Integration wurden nahezu alle Sensoren in der Gruppe `Diagnostic` zusammengefasst.  
+Die Integration unterscheidet nun zwischen "Steuerelementen", "Sensoren", "Konfiguration", "Diagnose" - und blendet standardmaeszig weniger Relevante Sensoren aus.  
+<img width="296" height="732" alt="grafik" src="https://github.com/user-attachments/assets/e8668918-6963-4e03-99a7-2ddea40c972c" />
+<img width="290" height="632" alt="grafik" src="https://github.com/user-attachments/assets/32386ac5-832e-40cb-a7b3-dac19ea0b25b" />
+<img width="291" height="545" alt="grafik" src="https://github.com/user-attachments/assets/12e64b20-6c8a-4dd4-8905-94bf2b54eaba" />
+<img width="293" height="251" alt="grafik" src="https://github.com/user-attachments/assets/ebd54eed-e1c3-45a8-aa59-cfa42383fccf" />
+
+
 
 ## Fehlerbehebung
 

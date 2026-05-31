@@ -1,0 +1,242 @@
+alias: SunEnergyXT – Grid-Beneficial Charging & Discharging v1.4
+description: ""
+triggers:
+  - minutes: /2
+    trigger: time_pattern
+  - entity_id: sensor.solaredge_i1_m1_ac_power
+    above: 100
+    trigger: numeric_state
+  - entity_id: sensor.solaredge_i1_m1_ac_power
+    below: 100
+    trigger: numeric_state
+  - entity_id: sensor.solaredge_i1_ac_power
+    above: 0
+    trigger: numeric_state
+  - event: sunrise
+    offset: "00:30:00"
+    trigger: sun
+  - event: sunset
+    trigger: sun
+  - event: start
+    trigger: homeassistant
+actions:
+  - variables:
+      current_hour: "{{ now().hour + now().minute / 60.0 }}"
+      soc_max: >
+        {% if _sa_number and states(_sa_number) not in ['unknown','unavailable']
+        %}
+          {{ states(_sa_number) | float(100) }}
+        {% else %}
+          100
+        {% endif %}
+      soc_min: >
+        {% if _si_number and states(_si_number) not in ['unknown','unavailable']
+        %}
+          {{ states(_si_number) | float(10) }}
+        {% else %}
+          10
+        {% endif %}
+      soc_current: "{{ states(_soc_sensor) | float(0) }}"
+      battery_modules: >
+        {% if _bn_sensor and states(_bn_sensor) not in ['unknown','unavailable']
+        %}
+          {{ states(_bn_sensor) | int(1) }}
+        {% else %}
+          1
+        {% endif %}
+      battery_capacity_kwh: "{{ battery_modules * 5.0 }}"
+      charge_window_hours: "{{ [(_end_hour | float) - current_hour, 1] | max }}"
+      capacity_based_min_power: >
+        {% set empty_kwh = battery_capacity_kwh * (1 - soc_current / 100.0) %}
+        {% set needed_w  = (empty_kwh * 1000.0) / charge_window_hours %} {{
+        needed_w | round(0) | int }}
+      is_max: "{{ states(_is_number) | float(800) }}"
+      pv_now: "{{ states(_pv_sensor)   | float(0) }}"
+      grid_now: "{{ states(_grid_sensor) | float(0) }}"
+      ev_power_total: >
+        {% set wb = states(_wb_power)  | float(0) if _wb_power  else 0 %} {% set
+        e1 = states(_ev1_power) | float(0) if _ev1_power else 0 %} {% set e2 =
+        states(_ev2_power) | float(0) if _ev2_power else 0 %} {{ wb if wb > 0
+        else (e1 + e2) }}
+      ev_soc_current: >
+        {% if _wb_soc and states(_wb_soc) not in ['unknown','unavailable'] %}
+          {{ states(_wb_soc) | float(100) }}
+        {% elif _ev1_power and states(_ev1_power) | float(0) > 50 and _ev1_soc
+        %}
+          {{ states(_ev1_soc) | float(100) }}
+        {% elif _ev2_power and states(_ev2_power) | float(0) > 50 and _ev2_soc
+        %}
+          {{ states(_ev2_soc) | float(100) }}
+        {% else %}
+          100
+        {% endif %}
+      ev_needs_priority: |
+        {{ ev_power_total > 50 and ev_soc_current < _ev_target_soc }}
+      forecast_today_kwh: >
+        {# Priorität 1: Externer Forecast-Sensor (Forecast.Solar, Solcast etc.)
+        #} {% if _fc1 and states(_fc1) not in ['unknown','unavailable'] %}
+          {% set f1 = states(_fc1) | float(0) %}
+          {% set f2 = states(_fc2) | float(0) if _fc2 else 0 %}
+          {% set f3 = states(_fc3) | float(0) if _fc3 else 0 %}
+          {{ f1 + f2 + f3 }}
+
+        {# Priorität 2: Sonnenscheindauer-Sensor + Anlagendaten #} {% elif
+        _sun_duration and _pv_peak_kw | float(0) > 0
+             and state_attr(_sun_duration, 'data') is not none %}
+          {% set data  = state_attr(_sun_duration, 'data') %}
+          {% set eff   = _pv_efficiency | float(80) / 100.0 %}
+          {% set peak  = _pv_peak_kw | float(0) %}
+          {% set today = now().date() | string %}
+          {% set ns    = namespace(total=0.0) %}
+          {% for entry in data %}
+            {% if entry.datetime[:10] == today %}
+              {% set ns.total = ns.total + (entry.value | float(0) / 3600.0 * peak * eff) %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.total | round(2) }}
+
+        {# Priorität 3: Kein Forecast → 0 (konservativer Fallback) #} {% else %}
+          0
+        {% endif %}
+      charge_start_hour: "{{ now().hour + now().minute / 60 if pv_now > 0 else 24 }}"
+      cloud_cover: >
+        {% if _cloud_sensor and states(_cloud_sensor) not in
+        ['unknown','unavailable'] %}
+          {{ states(_cloud_sensor) | float(0) }}
+        {% elif _weather and states(_weather) not in ['unknown','unavailable']
+        %}
+          {% set cond = state_attr(_weather, 'condition') | default('') %}
+          {% if   cond in ['sunny','clear-night']            %}0
+          {% elif cond in ['partlycloudy']                   %}35
+          {% elif cond in ['cloudy']                         %}70
+          {% elif cond in ['rainy','pouring','snowy','fog']  %}90
+          {% else                                            %}50
+          {% endif %}
+        {% else %}
+          0
+        {% endif %}
+      weather_factor: >
+        {{ [1.0 - (cloud_cover | float(0) / 100.0 * 0.75), 0.1] | max | round(4)
+        }}
+      curve_factor: >
+        {% set h   = current_hour %} {% set t_p = _peak_hour | float %} {% set
+        t_e = _end_hour  | float %} {% set a   = _aggressiveness | float(3) %}
+        {% if pv_now <= 0 or h >= t_e %}
+          0.0
+        {% elif h <= t_p %}
+          {{ (((h) / (t_p)) ** a) | round(4) }}
+        {% else %}
+          1.0
+        {% endif %}
+      soc_factor: >
+        {% set s     = soc_current | float %} {% set s_max = soc_max     | float
+        %} {% set s_thr = _soc_throttle | float %} {% if s >= s_max %}
+          0.0
+        {% elif s >= s_thr %}
+          {{ (0.5 * (s_max - s) / [s_max - s_thr, 1] | max) | round(4) }}
+        {% else %}
+          1.0
+        {% endif %}
+      ev_deduction: "{{ ev_power_total if ev_needs_priority else 0 }}"
+      available_surplus: "{{ [grid_now - ev_deduction, 0] | max }}"
+      target_charge_power: >
+        {% set raw     = available_surplus * curve_factor * soc_factor *
+        weather_factor %} {% set limited = [raw, is_max] | min %} {{ 0 if
+        limited < _min_surplus else (limited | round(0) | int) }}
+      pv_surplus_cap: "{{ [pv_now | float(0) - (_base_load | float(0)), 0] | max | int }}"
+      gs_value: "{{ -([ target_charge_power, pv_surplus_cap ] | min | int) }}"
+      operating_mode: >
+        {% set pv_active   = pv_now > 0 %} {% set in_window   = current_hour <
+        (_end_hour | float) %} {% set has_surplus = target_charge_power > 0 %}
+        {% set soc_ok      = soc_current < soc_max %}
+
+        {% if pv_active and in_window and has_surplus and soc_ok %}
+          active_charge
+        {% else %}
+          pid_mode
+        {% endif %}
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ operating_mode == 'active_charge' }}"
+        sequence:
+          - target:
+              entity_id: switch.tbsimulator0001_lokaler_nulleinspeisemodus
+            action: switch.turn_off
+          - target:
+              entity_id: number.tbsimulator0001_sollwert_leistung_netzanschluss
+            data:
+              value: "{{ gs_value }}"
+            action: number.set_value
+          - data:
+              message: >
+                [SunEnergyXT] AKTIVES LADEN | {{ now().strftime('%H:%M') }} |
+                SOC: {{ soc_current }}% / max: {{ soc_max }}% | Kapazität: {{
+                battery_capacity_kwh }}kWh ({{ battery_modules }}×5kWh) | Noch
+                zu laden: {{ capacity_based_min_power }}W Ø nötig | PV: {{
+                pv_now }}W | Grid: {{ grid_now }}W | EV: {{ ev_power_total }}W
+                (Prio: {{ ev_needs_priority }}) | Prognose: {{
+                forecast_today_kwh }}kWh | Bewölkung: {{ cloud_cover }}%
+                (Faktor: {{ weather_factor }}) | Kurve: {{ curve_factor }} |
+                SOC-Faktor: {{ soc_factor }} | Überschuss: {{ available_surplus
+                }}W | PV-Cap: {{ pv_surplus_cap }}W → GS: {{ gs_value }}W
+              level: warning
+              logger: custom_components.sunenergyxt.blueprint
+            action: system_log.write
+    default:
+      - target:
+          entity_id: number.tbsimulator0001_sollwert_leistung_netzanschluss
+        data:
+          value: 0
+        action: number.set_value
+      - target:
+          entity_id: switch.tbsimulator0001_lokaler_nulleinspeisemodus
+        action: switch.turn_on
+      - data:
+          message: >
+            [SunEnergyXT] PID-MODUS (MM=1, GS=0) | {{ now().strftime('%H:%M') }}
+            | SOC: {{ soc_current }}% | PV: {{ pv_now }}W | Grid: {{ grid_now
+            }}W | Grund: {% if not (pv_now > 0) %}kein PV (Nacht / früh morgens)
+            {%- elif current_hour >= (_end_hour | float) %}nach Ladezeit {%-
+            elif soc_current >= soc_max %}Speicher voll {%- elif
+            target_charge_power == 0 %}kein Überschuss / kein Bedarf {%- else
+            %}sonstige Bedingung{% endif %}
+          level: warning
+          logger: custom_components.sunenergyxt.blueprint
+        action: system_log.write
+variables:
+  _soc_sensor: sensor.tbsimulator0001_system_speicherlevel
+  _gs_number: number.tbsimulator0001_sollwert_leistung_netzanschluss
+  _is_number: number.tbsimulator0001_sollwert_max_wechselrichterleistung
+  _mm_switch: switch.tbsimulator0001_lokaler_nulleinspeisemodus
+  _sa_number: number.tbsimulator0001_system_ladegrenze
+  _si_number: number.tbsimulator0001_system_entladegrenze
+  _pv_sensor: sensor.solaredge_i1_ac_power
+  _grid_sensor: sensor.solaredge_i1_m1_ac_power
+  _base_load: 550
+  _min_surplus: 100
+  _fc1: null
+  _fc2: null
+  _fc3: null
+  _fc_good_thresh: 15
+  _weather: weather.renningen
+  _cloud_sensor: sensor.renningen_bewolkungsgrad
+  _wb_power: sensor.openwb_controller_ladeleistung_gesamt
+  _wb_soc: sensor.openwb_chargepoint_1_ladung
+  _ev1_power: null
+  _ev1_soc: null
+  _ev2_power: null
+  _ev2_soc: null
+  _ev_target_soc: 80
+  _peak_hour: 13
+  _end_hour: 17
+  _aggressiveness: 3
+  _soc_throttle: 80
+  _dis_reserve_soc: 15
+  _bn_sensor: sensor.tbsimulator0001_anzahl_der_online_batteriepacks
+  _grid_trigger: 100
+  _sun_duration: sensor.renningen_sonnenscheindauer
+  _pv_peak_kw: 13.26
+  _pv_efficiency: 80
+mode: single
+max_exceeded: silent
