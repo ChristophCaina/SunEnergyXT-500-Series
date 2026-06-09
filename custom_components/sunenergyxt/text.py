@@ -146,6 +146,11 @@ class SunlitText(CoordinatorEntity[SunlitDataUpdateCoordinator], TextEntity):
             self._attr_icon = icon
 
     @property
+    def extra_state_attributes(self) -> dict:
+        """Expose API key for debugging/transparency."""
+        return {"api_key": self._key}
+
+    @property
     def native_value(self) -> str:
         """
         Get the current value of the text entity.
