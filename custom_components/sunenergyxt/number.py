@@ -234,6 +234,11 @@ class SunlitNumber(CoordinatorEntity[SunlitDataUpdateCoordinator], NumberEntity)
             self._attr_icon = icon
 
     @property
+    def extra_state_attributes(self) -> dict:
+        """Expose API key for debugging/transparency."""
+        return {"api_key": self._key}
+
+    @property
     def native_value(self) -> float | None:
         """
         Get the current value of the number entity.
