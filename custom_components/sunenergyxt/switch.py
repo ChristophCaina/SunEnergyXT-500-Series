@@ -147,6 +147,11 @@ class SunlitSwitch(CoordinatorEntity[SunlitDataUpdateCoordinator], SwitchEntity)
             self._attr_icon = icon
 
     @property
+    def extra_state_attributes(self) -> dict:
+        """Expose API key for debugging/transparency."""
+        return {"api_key": self._key}
+
+    @property
     def is_on(self) -> bool:
         """
         Get the current state of the switch.
