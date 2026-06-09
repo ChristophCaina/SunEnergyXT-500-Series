@@ -606,4 +606,5 @@ class SunlitSensor(
         attrs = {}
         if self.coordinator.last_success_time:
             attrs["last_report_time"] = self.coordinator.last_success_time.isoformat()
+        attrs["api_key"] = self._key
         return attrs
