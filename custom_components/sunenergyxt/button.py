@@ -140,6 +140,11 @@ class SunlitButton(CoordinatorEntity[SunlitDataUpdateCoordinator], ButtonEntity)
         if icon:
             self._attr_icon = icon
 
+    @property
+    def extra_state_attributes(self) -> dict:
+        """Expose API key for debugging/transparency."""
+        return {"api_key": self._key}
+
     async def async_press(self) -> None:
         """
         Handle button press event.
