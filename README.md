@@ -331,7 +331,7 @@ Beitraege sind willkommen. Bitte reichen Sie Issues oder Pull Requests auf [GitH
 Dieses Projekt steht unter der MIT-Lizenz. Details finden Sie in der Datei [LICENSE](LICENSE).
 
 [releases-shield]: https://img.shields.io/github/release/ChristophCaina/SunEnergyXT-500-Series.svg
-[releases]: https://github.com/SunEnergyXT/SunEnergyXT-500-Series/releases
+[releases]: https://github.com/ChristophCaina/SunEnergyXT-500-Series/releases
 [commits-shield]: https://img.shields.io/github/commit-activity/y/ChristophCaina/SunEnergyXT-500-Series.svg
 [commits]: https://github.com/ChristophCaina/SunEnergyXT-500-Series/commits/main
 [license-shield]: https://img.shields.io/github/license/ChristophCaina/SunEnergyXT-500-Series.svg
