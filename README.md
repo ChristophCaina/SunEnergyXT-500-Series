@@ -203,6 +203,7 @@ Hinweise:
 | `VP4` | PV 4 Eingangsspannung | V | Eingangsspannung von MPPT-Kanal 4 |
 | `GP` | Systemleistung am Netzanschluss | W | Leistung am Netzanschluss. Positive Werte bedeuten in der Regel Einspeisung, negative Werte in der Regel Netzbezug oder Netzladen |
 | `LP` | Systemleistung am Lastanschluss | W | Aktuelle Leistung am Lastanschluss |
+| `BP` | System-Batterieleistung | W | Aktuelle Batterieleistung. Positive Werte bedeuten Laden, negative Werte bedeuten Entladen |
 | `GD1` | Heutige Netzladung | kWh | Energie, die heute aus dem Netz in das System geladen wurde |
 | `GD2` | Heutige Netzeinspeisung | kWh | Energie, die heute ueber den Netzanschluss ins Netz eingespeist wurde |
 | `LD` | Heutige Off-Grid-Ausgabe | kWh | Heute abgegebene Off-Grid-Ausgangsenergie |
