@@ -16,7 +16,7 @@
     "requirements": [
         "aiohttp"
     ],
-    "version": "0.1.2",
+    "version": "0.1.3",
     "zeroconf": [
         {
             "type": "_http._tcp.local."

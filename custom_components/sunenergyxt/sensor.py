@@ -195,7 +195,7 @@ SENSOR_META: dict[str, dict[str, Any]] = {
         "state_class": SensorStateClass.MEASUREMENT,
         "icon": "mdi:home-lightning-bolt",
     },
-    "PB": {
+    "BP": {
         "unit": UnitOfPower.WATT,
         "device_class": SensorDeviceClass.POWER,
         "state_class": SensorStateClass.MEASUREMENT,
@@ -454,7 +454,7 @@ async def async_setup_entry(
         "VP4",
         "GP",
         "LP",
-        "PB",
+        "BP",
         "GD1",
         "GD2",
         "LD",
