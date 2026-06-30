@@ -43,7 +43,7 @@ Die vollstaendige Referenz der lokalen API, Beispiele fuer `MD`-Zaehlerverbindun
 
 ### Manuelle Installation
 
-1. Laden Sie das aktuelle [Release-Paket](https://github.com/SunEnergyXT/SunEnergyXT-500-Series/releases) herunter
+1. Laden Sie das aktuelle [Release-Paket](https://github.com/ChristophCaina/SunEnergyXT-500-Series/releases) herunter
 2. Entpacken Sie es in `config/custom_components/`
 3. Stellen Sie sicher, dass das Zielverzeichnis `config/custom_components/sunenergyxt/` ist
 4. Starten Sie Home Assistant neu
@@ -324,14 +324,14 @@ Die Integration unterscheidet nun zwischen "Steuerelementen", "Sensoren", "Konfi
 
 ## Beitrag
 
-Beitraege sind willkommen. Bitte reichen Sie Issues oder Pull Requests auf [GitHub](https://github.com/SunEnergyXT/SunEnergyXT-500-Series) ein.
+Beitraege sind willkommen. Bitte reichen Sie Issues oder Pull Requests auf [GitHub](https://github.com/ChristophCaina/SunEnergyXT-500-Series) ein.
 
 ## Lizenz
 
 Dieses Projekt steht unter der MIT-Lizenz. Details finden Sie in der Datei [LICENSE](LICENSE).
 
-[releases-shield]: https://img.shields.io/github/release/SunEnergyXT/SunEnergyXT-500-Series.svg
+[releases-shield]: https://img.shields.io/github/release/ChristophCaina/SunEnergyXT-500-Series.svg
 [releases]: https://github.com/SunEnergyXT/SunEnergyXT-500-Series/releases
-[commits-shield]: https://img.shields.io/github/commit-activity/y/SunEnergyXT/SunEnergyXT-500-Series.svg
-[commits]: https://github.com/SunEnergyXT/SunEnergyXT-500-Series/commits/main
-[license-shield]: https://img.shields.io/github/license/SunEnergyXT/SunEnergyXT-500-Series.svg
+[commits-shield]: https://img.shields.io/github/commit-activity/y/ChristophCaina/SunEnergyXT-500-Series.svg
+[commits]: https://github.com/ChristophCaina/SunEnergyXT-500-Series/commits/main
+[license-shield]: https://img.shields.io/github/license/ChristophCaina/SunEnergyXT-500-Series.svg
