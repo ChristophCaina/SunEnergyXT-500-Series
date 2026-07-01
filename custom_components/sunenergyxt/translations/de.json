@@ -258,6 +258,9 @@
             "fp": {
                 "name": "Max. PV-Bypass-Ausgangsleistung"
             }
+            "mg": {
+                "name": "Maximale netzgekoppelte Ausgangsleistung"
+            }
         },
         "button": {
             "rt": {
