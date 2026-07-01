@@ -257,7 +257,7 @@
             },
             "fp": {
                 "name": "Max PV Bypass Output Power"
-            }
+            },
             "mg": {
                 "name": "Maximum Grid-Connected Output Power"
             }
