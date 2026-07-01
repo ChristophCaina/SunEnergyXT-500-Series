@@ -41,7 +41,13 @@ SWITCH_META: dict[str, dict[str, Any]] = {
     },
     "UO": {
         "icon": "mdi:power-plug-outline",
+        "device_class": SwitchDeviceClass.Outlet",
     },
+    "LFB": {
+        "icon": "mdi:link-variant",
+    };
+    "LPS": {
+        "icon": "mdi:link-variant",
 }
 
 
