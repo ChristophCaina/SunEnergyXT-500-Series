@@ -280,6 +280,12 @@
             "uo": {
                 "name": "UPS-Modus"
             }
+            "lfb": {
+                "name": "Schalter fuer Lastprioritaet"
+            },
+            "lps": {
+                "name": "Schalter fuer den Inselausgang"
+            }
         },
         "text": {
             "md": {
