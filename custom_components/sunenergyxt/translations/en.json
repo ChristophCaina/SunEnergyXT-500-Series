@@ -280,6 +280,12 @@
             "uo": {
                 "name": "UPS Mode"
             }
+            "lfb": {
+                "name": "Load Priority Switch"
+            },
+            "lps": {
+                "name": "Off-Grid Output Switch"
+            }
         },
         "text": {
             "md": {
