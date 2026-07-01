@@ -135,16 +135,65 @@ def _build_md_string(proxy_url: str) -> str:
     return json.dumps(md, separators=(",", ":"))
 
 
-async def _write_md_and_mm(ip: str, md_string: str) -> None:
+async def _read_device_state(ip: str) -> dict[str, Any]:
     """
-    Write MD (meter connection) and activate MM (self-consumption mode)
-    on the device so it uses our proxy as its smart meter.
+    Read the current MM/MD state directly from the device.
+
+    This is the single source of truth for whether the local proxy /
+    zero-feed mode is currently active — never inferred from stored
+    HA config data.
+
+    Args:
+        ip: IP address of the device
+
+    Returns:
+        Dict with "MM" (int | None) and "MD" (str | None) as currently
+        reported by the device. Empty values on read failure.
+
+    """
+    try:
+        async with async_timeout.timeout(5), aiohttp.ClientSession() as session:
+            async with session.get(f"http://{ip}/read") as resp:
+                if resp.status != HTTPStatus.OK:
+                    _LOGGER.warning(
+                        "Could not read device state: HTTP %d", resp.status
+                    )
+                    return {"MM": None, "MD": None}
+                data = await resp.json()
+                reported = data.get("state", {}).get("reported", {})
+                return {"MM": reported.get("MM"), "MD": reported.get("MD")}
+    except Exception as err:
+        _LOGGER.warning("Error reading device state from %s: %s", ip, err)
+        return {"MM": None, "MD": None}
+
+
+def _md_points_to_proxy(current_md: str | None, proxy_url: str) -> bool:
+    """Check whether the device's current MD already points at our proxy."""
+    if not current_md:
+        return False
+    try:
+        parsed = json.loads(current_md)
+    except (json.JSONDecodeError, TypeError):
+        return False
+    return parsed.get("direct", {}).get("dat_url") == proxy_url
+
+
+async def _sync_md(ip: str, md_string: str) -> None:
+    """
+    Ensure the device's MD points at our proxy.
+
+    Only writes MD — never touches MM. MM is exclusively owned by the
+    user-facing switch entity, which already reflects/controls the live
+    device state via the coordinator.
+
+    This is idempotent by design: callers should check
+    `_md_points_to_proxy()` first and only call this when it's False,
+    so we never write on every reload/update if nothing actually changed.
     """
     payload = json.dumps({
         "state": {
-            "LM": 1,   # local mode on
+            "LM": 1,   # local mode on — required for the proxy endpoint to be used
             "MD": md_string,
-            "MM": 1,   # self-consumption mode on
         }
     })
     try:
@@ -156,19 +205,25 @@ async def _write_md_and_mm(ip: str, md_string: str) -> None:
             ) as resp:
                 if resp.status not in (200, 201, 204):
                     _LOGGER.warning(
-                        "Failed to write MD/MM to device: HTTP %d", resp.status
+                        "Failed to write MD to device: HTTP %d", resp.status
                     )
                 else:
                     _LOGGER.info(
-                        "✅ Proxy MD written to device — device will now use "
-                        "HA sensor as smart meter"
+                        "✅ Proxy MD written to device (MM left untouched — "
+                        "controlled via switch entity)"
                     )
     except Exception as err:
-        _LOGGER.error("Error writing MD/MM to device: %s", err)
+        _LOGGER.error("Error writing MD to device: %s", err)
 
 
 async def _disable_mm(ip: str) -> None:
-    """Disable self-consumption mode on the device."""
+    """
+    Disable self-consumption mode and clear MD on the device.
+
+    Only called when the config entry is actually being removed (see
+    async_remove_entry), never on a plain reload/update, since the
+    proxy URL becomes invalid once the entry is gone.
+    """
     payload = json.dumps({"state": {"MM": 0, "MD": ""}})
     try:
         async with async_timeout.timeout(5), aiohttp.ClientSession() as session:
@@ -218,8 +273,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     If a grid sensor is configured:
     1. Registers a local HTTP proxy endpoint (Shelly-compatible)
-    2. Writes MD + MM to the device so it polls the proxy
-    3. The device's internal PID handles the actual regulation
+    2. Ensures MD on the device points at our proxy (idempotent — only
+       writes if it's not already correct; never writes on every reload)
+    3. The device's internal PID handles the actual regulation once the
+       user activates it via the "MM" switch entity
+
+    Note: MM (self-consumption / zero-feed mode) is intentionally never
+    written here. It is fully owned by the "MM" switch entity, which
+    reflects the live device state via the coordinator. Updating or
+    reloading the integration must never silently flip the device's
+    operating mode — only an explicit user action on the switch does
+    that. (See GitHub issue #12.)
 
     Args:
         hass: Home Assistant instance
@@ -259,7 +323,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "grid_sensor": grid_sensor,
     }
 
-    # If grid sensor configured: set up proxy and write MD/MM to device
+    # If grid sensor configured: ensure the proxy MD is set up.
+    # Read-first, write-only-on-mismatch — MM is never touched here.
     if grid_sensor:
         try:
             # Get HA's internal URL (how the device reaches HA on the LAN)
@@ -271,13 +336,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             internal_url = "http://homeassistant.local:8123"
 
         proxy_url = f"{internal_url.rstrip('/')}/api/sunenergyxt_proxy/{entry.entry_id}/status"
-        md_string = _build_md_string(proxy_url)
 
-        _LOGGER.info(
-            "Grid sensor configured: %s — proxy URL: %s", grid_sensor, proxy_url
-        )
+        device_state = await _read_device_state(ip)
 
-        await _write_md_and_mm(ip, md_string)
+        if _md_points_to_proxy(device_state.get("MD"), proxy_url):
+            _LOGGER.debug(
+                "Device MD already points at our proxy (%s) — skipping write",
+                proxy_url,
+            )
+        else:
+            _LOGGER.info(
+                "Grid sensor configured: %s — pointing device MD at proxy URL: %s",
+                grid_sensor,
+                proxy_url,
+            )
+            md_string = _build_md_string(proxy_url)
+            await _sync_md(ip, md_string)
 
     coordinator = SunlitDataUpdateCoordinator(
         hass=hass,
@@ -300,8 +374,12 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """
     Unload a SunEnergyXT config entry.
 
-    If a grid sensor was configured, disables MM on the device so it
-    doesn't keep trying to reach a proxy that no longer exists.
+    This runs on every reload — including HA restarts and integration
+    updates — not just on removal. It must therefore be a pure platform
+    unload and must NOT touch the device's MM/MD state, otherwise every
+    update/restart would silently flip the device's operating mode.
+    (See GitHub issue #12.) Device-side cleanup only happens in
+    async_remove_entry, which runs solely on actual removal.
 
     Args:
         hass: Home Assistant instance
@@ -311,17 +389,32 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         True if unload was successful
 
     """
-    entry_data = hass.data.get(DOMAIN, {}).get(entry.entry_id, {})
-    ip = entry_data.get("ip")
-    grid_sensor = entry_data.get("grid_sensor")
-
-    # Disable MM on device when unloading if we had set it up
-    if ip and grid_sensor:
-        await _disable_mm(ip)
-
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id, None)
 
     return unload_ok
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """
+    Handle full removal of a SunEnergyXT config entry.
+
+    Unlike async_unload_entry (called on every reload, including updates
+    and HA restarts), this only runs when the user actually deletes the
+    integration. This is the correct — and only — place to disable MM
+    and clear MD on the device, since the proxy endpoint genuinely stops
+    existing once the entry is gone.
+
+    Args:
+        hass: Home Assistant instance
+        entry: Config entry being removed
+
+    """
+    entry_data = hass.data.get(DOMAIN, {}).get(entry.entry_id, {})
+    ip = entry_data.get("ip") or entry.data.get("ip")
+    grid_sensor = entry_data.get("grid_sensor") or entry.data.get(CONF_GRID_SENSOR)
+
+    if ip and grid_sensor:
+        await _disable_mm(ip)
