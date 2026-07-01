@@ -93,6 +93,13 @@ NUMBER_META: dict[str, dict[str, Any]] = {
         "device_class": NumberDeviceClass.POWER,
         "icon": "mdi:solar-power-variant-outline",
     },
+  "MG": {
+        "min_value": 1,
+        "max_value": 2400,
+        "step": 1,
+        "unit": UnitOfPower.WATT,
+        "device_class": NumberDeviceClass.POWER,                                 
+        "icon": "mdi:flash",
 }
 
 
@@ -135,6 +142,7 @@ async def async_setup_entry(
         "PT",
         "UG",
         "FP",
+        "MG",
     ]
 
     for key in keys:
@@ -214,7 +222,7 @@ class SunlitNumber(CoordinatorEntity[SunlitDataUpdateCoordinator], NumberEntity)
 
         # Cap GS and IS for SunEnergyXT 500 (non-Pro) model
         if self._model == "SunEnergyXT500":
-            if self._key in ("GS", "IS"):
+            if self._key in ("GS", "IS", "MG"):
                 self._attr_native_max_value = 800
 
         step = meta.get("step")
