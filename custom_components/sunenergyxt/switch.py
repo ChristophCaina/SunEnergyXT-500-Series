@@ -86,6 +86,8 @@ async def async_setup_entry(
         "MM",
         "PM",
         "UO",
+        "LFB",
+        "LPS",
     ]
 
     for key in keys:
@@ -188,8 +190,18 @@ class SunlitSwitch(CoordinatorEntity[SunlitDataUpdateCoordinator], SwitchEntity)
             RuntimeError: If there's an error writing to the device
 
         """
-        value = 1 if is_on else 0
-        payload = {"state": {self._key: value}}
+        if self._key == "MM":
+            value = 1 if is_on else 0
+            md_value = self.coordinator.data.get("MD", "").strip()
+            if value == 0:
+                payload = {"state": {"MM": 0, "MD": ""}}
+            elif md_value == "":
+                return
+            else:
+                payload = {"state": {self._key: value}}
+        else:
+            value = 1 if is_on else 0
+            payload = {"state": {self._key: value}}
         try:
             async with (
                 async_timeout.timeout(5),
