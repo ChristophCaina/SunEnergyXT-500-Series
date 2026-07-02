@@ -257,6 +257,9 @@
             },
             "fp": {
                 "name": "Max. PV-Bypass-Ausgangsleistung"
+            },
+            "mg": {
+                "name": "Maximale netzgekoppelte Ausgangsleistung"
             }
         },
         "button": {
@@ -276,6 +279,12 @@
             },
             "uo": {
                 "name": "UPS-Modus"
+            },
+            "lfb": {
+                "name": "Schalter fuer Lastprioritaet"
+            },
+            "lps": {
+                "name": "Schalter fuer den Inselausgang"
             }
         },
         "text": {

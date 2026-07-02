@@ -257,6 +257,9 @@
             },
             "fp": {
                 "name": "Max PV Bypass Output Power"
+            },
+            "mg": {
+                "name": "Maximum Grid-Connected Output Power"
             }
         },
         "button": {
@@ -276,6 +279,12 @@
             },
             "uo": {
                 "name": "UPS Mode"
+            },
+            "lfb": {
+                "name": "Load Priority Switch"
+            },
+            "lps": {
+                "name": "Off-Grid Output Switch"
             }
         },
         "text": {
