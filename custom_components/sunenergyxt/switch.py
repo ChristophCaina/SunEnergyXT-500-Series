@@ -16,9 +16,10 @@ from http import HTTPStatus
 from typing import Any
 
 import async_timeout
-from homeassistant.components.switch import SwitchEntity, SwitchDeviceClass
+from homeassistant.components.switch import SwitchDeviceClass, SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -151,13 +152,13 @@ class SunlitSwitch(CoordinatorEntity[SunlitDataUpdateCoordinator], SwitchEntity)
         self._attr_translation_key = key.lower()
         self._attr_device_info = device_info
 
-        device_class = meta.get("device_class")
-        if device_class:
-            self._attr_device_class = device_class
-
         icon = meta.get("icon")
         if icon:
             self._attr_icon = icon
+
+        device_class = meta.get("device_class")
+        if device_class:
+            self._attr_device_class = device_class
 
     @property
     def extra_state_attributes(self) -> dict:
@@ -199,9 +200,23 @@ class SunlitSwitch(CoordinatorEntity[SunlitDataUpdateCoordinator], SwitchEntity)
             value = 1 if is_on else 0
             md_value = self.coordinator.data.get("MD", "").strip()
             if value == 0:
-                payload = {"state": {"MM": 0, "MD": ""}}
+                # Only touch MM here. MD is independent config (which
+                # meter/proxy field to use) and must survive MM being
+                # switched off — otherwise immediately switching MM back
+                # on fails with "no meter configured" until the next
+                # reload re-syncs MD via _sync_md() in __init__.py.
+                payload = {"state": {"MM": 0}}
             elif md_value == "":
-                return
+                # Turning MM on requires a meter (MD) to already be
+                # configured — either via the config flow's grid sensor
+                # (proxy) or manually via the MD text entity. Surface
+                # this to the user instead of silently doing nothing.
+                msg = (
+                    "Cannot enable local zero feed-in mode (MM): no meter "
+                    "configured (MD is empty). Configure a grid sensor via "
+                    "the integration options, or set MD manually first."
+                )
+                raise HomeAssistantError(msg)
             else:
                 payload = {"state": {self._key: value}}
         else:
@@ -225,4 +240,4 @@ class SunlitSwitch(CoordinatorEntity[SunlitDataUpdateCoordinator], SwitchEntity)
 
         if isinstance(self.coordinator.data, dict):
             self.coordinator.data[self._key] = value
-        self.async_write_ha_state()
+        self.coordinator.async_set_updated_data(self.coordinator.data)

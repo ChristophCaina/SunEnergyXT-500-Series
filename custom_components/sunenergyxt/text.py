@@ -183,11 +183,13 @@ class SunlitText(CoordinatorEntity[SunlitDataUpdateCoordinator], TextEntity):
             RuntimeError: If there's an error writing to the device
 
         """
-        if self._key == "MD":
-            mm_value = 0 if value.strip() == "" else 1
-            payload = {"state": {"MM": mm_value, "MD": value}}
-        else:
-            payload = {"state": {self._key: value}}
+        # MD is written as-is. MM is intentionally never touched here —
+        # ownership of MM belongs exclusively to the MM switch entity
+        # (see GitHub issue #12: silently flipping MM as a side effect
+        # of an unrelated write is exactly the bug class that issue
+        # fixed at the integration-reload level; the MD text entity
+        # must not reintroduce it at the entity level).
+        payload = {"state": {self._key: value}}
         try:
             async with (
                 async_timeout.timeout(5),
@@ -206,6 +208,4 @@ class SunlitText(CoordinatorEntity[SunlitDataUpdateCoordinator], TextEntity):
 
         if isinstance(self.coordinator.data, dict):
             self.coordinator.data[self._key] = value
-            if self._key == "MD":
-                self.coordinator.data["MM"] = 0 if value.strip() == "" else 1
-        self.async_write_ha_state()
+            self.coordinator.async_set_updated_data(self.coordinator.data)

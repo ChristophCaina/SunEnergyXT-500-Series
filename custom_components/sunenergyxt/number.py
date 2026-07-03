@@ -98,9 +98,9 @@ NUMBER_META: dict[str, dict[str, Any]] = {
         "max_value": 2400,
         "step": 1,
         "unit": UnitOfPower.WATT,
-        "device_class": NumberDeviceClass.POWER,                                 
+        "device_class": NumberDeviceClass.POWER,
         "icon": "mdi:flash",
-     },
+    },
 }
 
 
@@ -300,5 +300,4 @@ class SunlitNumber(CoordinatorEntity[SunlitDataUpdateCoordinator], NumberEntity)
 
         if isinstance(self.coordinator.data, dict):
             self.coordinator.data[self._key] = value_int
-
-        self.async_write_ha_state()
+            self.coordinator.async_set_updated_data(self.coordinator.data)
