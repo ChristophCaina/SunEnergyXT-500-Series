@@ -15,23 +15,39 @@
                 "data": {}
             },
             "grid_sensor": {
-                "title": "Netzfluss-Sensor (optional)",
-                "description": "Wähle einen Home Assistant Sensor, der die aktuelle Netzleistung in Watt liefert.\n\nPositive Werte = Einspeisung ins Netz, negative Werte = Bezug aus dem Netz.\n\nWenn konfiguriert, schreibt die Integration den GS-Sollwert automatisch bei jeder Sensorzustandsänderung — kein manueller rest_command nötig.\n\nDieses Feld ist optional. Ohne Auswahl kann GS weiterhin manuell über die Number-Entität gesetzt werden.",
+                "title": "Zähler-Konfiguration (optional)",
+                "description": "Wähle Home Assistant Sensoren, die die aktuelle Netzleistung in Watt liefern.\n\nPositive Werte = Einspeisung ins Netz, negative Werte = Bezug aus dem Netz.\n\nFür Single-Phase-Setups reicht der 'Netzfluss-Sensor'. Bei mehreren Kopfspeichern auf unterschiedlichen Phasen können zusätzlich Phasen-Sensoren angegeben werden — wähle dann bei 'Phase dieses Kopfspeichers' aus, welche Phase dieses Gerät physisch versorgt.\n\nAlle Felder sind optional. Ohne Auswahl kann GS weiterhin manuell über die Number-Entität gesetzt werden.",
                 "data": {
-                    "grid_sensor_entity_id": "Netzfluss-Sensor"
+                    "grid_sensor_entity_id": "Netzfluss-Sensor (Gesamt)",
+                    "phase_a_sensor_entity_id": "Phase L1 Sensor",
+                    "phase_b_sensor_entity_id": "Phase L2 Sensor",
+                    "phase_c_sensor_entity_id": "Phase L3 Sensor",
+                    "meter_phase": "Phase dieses Kopfspeichers"
                 },
                 "data_description": {
-                    "grid_sensor_entity_id": "Sensor mit Netzleistung in Watt (z. B. vom SolarEdge Meter, Shelly, Tibber Pulse …). Feld leer lassen für manuellen Betrieb."
+                    "grid_sensor_entity_id": "Sensor mit gesamter Netzleistung in Watt (z. B. SolarEdge Meter, Shelly, Tibber Pulse …). Feld leer lassen für manuellen Betrieb.",
+                    "phase_a_sensor_entity_id": "Optional: Sensor mit Netzleistung auf Phase L1 in Watt (z. B. vom Shelly Pro 3EM).",
+                    "phase_b_sensor_entity_id": "Optional: Sensor mit Netzleistung auf Phase L2 in Watt.",
+                    "phase_c_sensor_entity_id": "Optional: Sensor mit Netzleistung auf Phase L3 in Watt.",
+                    "meter_phase": "Welche Phase dieser Kopfspeicher zur Regelung nutzen soll. 'Gesamt' entspricht dem bisherigen Single-Phase-Verhalten."
                 }
             },
             "reconfigure": {
-                "title": "Netzfluss-Sensor ändern",
-                "description": "Ändere den Home Assistant Sensor für die automatische Eigenverbrauchsregelung.\n\nPositive Werte = Einspeisung ins Netz, negative Werte = Bezug aus dem Netz.\n\nFeld leer lassen um die automatische Regelung zu deaktivieren.",
+                "title": "Zähler-Konfiguration ändern",
+                "description": "Ändere die Home Assistant Sensoren für die automatische Eigenverbrauchsregelung.\n\nPositive Werte = Einspeisung ins Netz, negative Werte = Bezug aus dem Netz.\n\nAlle Felder leer lassen um die automatische Regelung zu deaktivieren.",
                 "data": {
-                    "grid_sensor_entity_id": "Netzfluss-Sensor"
+                    "grid_sensor_entity_id": "Netzfluss-Sensor (Gesamt)",
+                    "phase_a_sensor_entity_id": "Phase L1 Sensor",
+                    "phase_b_sensor_entity_id": "Phase L2 Sensor",
+                    "phase_c_sensor_entity_id": "Phase L3 Sensor",
+                    "meter_phase": "Phase dieses Kopfspeichers"
                 },
                 "data_description": {
-                    "grid_sensor_entity_id": "Sensor mit Netzleistung in Watt. Feld leer lassen für manuellen Betrieb."
+                    "grid_sensor_entity_id": "Sensor mit gesamter Netzleistung in Watt. Feld leer lassen für manuellen Betrieb.",
+                    "phase_a_sensor_entity_id": "Optional: Sensor mit Netzleistung auf Phase L1 in Watt.",
+                    "phase_b_sensor_entity_id": "Optional: Sensor mit Netzleistung auf Phase L2 in Watt.",
+                    "phase_c_sensor_entity_id": "Optional: Sensor mit Netzleistung auf Phase L3 in Watt.",
+                    "meter_phase": "Welche Phase dieser Kopfspeicher zur Regelung nutzen soll."
                 }
             }
         },
@@ -52,6 +68,16 @@
             "already_configured": "Dieses Gerät wurde bereits hinzugefügt.",
             "unknown": "Ein unbekannter Fehler ist aufgetreten.",
             "reconfigure_successful": "Konfiguration erfolgreich aktualisiert."
+        }
+    },
+    "selector": {
+        "meter_phase": {
+            "options": {
+                "total": "Gesamt",
+                "a": "Phase L1",
+                "b": "Phase L2",
+                "c": "Phase L3"
+            }
         }
     },
     "entity": {
