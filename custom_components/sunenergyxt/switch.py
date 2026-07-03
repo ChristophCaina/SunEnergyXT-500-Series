@@ -16,7 +16,7 @@ from http import HTTPStatus
 from typing import Any
 
 import async_timeout
-from homeassistant.components.switch import SwitchEntity
+from homeassistant.components.switch import SwitchEntity, SwitchDeviceClass
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -41,13 +41,14 @@ SWITCH_META: dict[str, dict[str, Any]] = {
     },
     "UO": {
         "icon": "mdi:power-plug-outline",
-        "device_class": SwitchDeviceClass.Outlet",
+        "device_class": SwitchDeviceClass.OUTLET,
     },
     "LFB": {
         "icon": "mdi:link-variant",
-    };
+    },
     "LPS": {
         "icon": "mdi:link-variant",
+    },
 }
 
 
@@ -149,6 +150,10 @@ class SunlitSwitch(CoordinatorEntity[SunlitDataUpdateCoordinator], SwitchEntity)
         self._attr_unique_id = f"{DOMAIN}_{entry_id}_{key}"
         self._attr_translation_key = key.lower()
         self._attr_device_info = device_info
+
+        device_class = meta.get("device_class")
+        if device_class:
+            self._attr_device_class = device_class
 
         icon = meta.get("icon")
         if icon:
