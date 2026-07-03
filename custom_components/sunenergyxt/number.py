@@ -93,13 +93,14 @@ NUMBER_META: dict[str, dict[str, Any]] = {
         "device_class": NumberDeviceClass.POWER,
         "icon": "mdi:solar-power-variant-outline",
     },
-  "MG": {
+    "MG": {
         "min_value": 1,
         "max_value": 2400,
         "step": 1,
         "unit": UnitOfPower.WATT,
         "device_class": NumberDeviceClass.POWER,                                 
         "icon": "mdi:flash",
+     },
 }
 
 
