@@ -31,9 +31,89 @@ from homeassistant.data_entry_flow import AbortFlow, FlowResult
 from homeassistant.helpers import selector
 from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
 
-from .const import CONF_GRID_SENSOR, DOMAIN, HOST_PREFIX, HOST_SUFFIX
+from .const import (
+    CONF_GRID_SENSOR,
+    CONF_METER_PHASE,
+    CONF_PHASE_A_SENSOR,
+    CONF_PHASE_B_SENSOR,
+    CONF_PHASE_C_SENSOR,
+    DOMAIN,
+    HOST_PREFIX,
+    HOST_SUFFIX,
+    METER_PHASE_OPTIONS,
+    METER_PHASE_TOTAL,
+)
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _meter_schema(defaults: dict[str, Any] | None = None) -> vol.Schema:
+    """
+    Build the schema for meter/phase sensor selection.
+
+    Shared between async_step_grid_sensor (initial setup) and
+    async_step_reconfigure, so both stay in sync as fields are added.
+
+    CONF_GRID_SENSOR remains the legacy single-sensor / "total" input.
+    The three phase sensors are additive and optional — a single-phase
+    setup only fills CONF_GRID_SENSOR and leaves meter_phase at "total",
+    which is fully backward compatible with pre-multi-phase configs.
+    """
+    defaults = defaults or {}
+    return vol.Schema(
+        {
+            vol.Optional(
+                CONF_GRID_SENSOR,
+                default=defaults.get(CONF_GRID_SENSOR),
+            ): selector.EntitySelector(
+                selector.EntitySelectorConfig(
+                    domain=SENSOR_DOMAIN,
+                    device_class="power",
+                    multiple=False,
+                )
+            ),
+            vol.Optional(
+                CONF_PHASE_A_SENSOR,
+                default=defaults.get(CONF_PHASE_A_SENSOR),
+            ): selector.EntitySelector(
+                selector.EntitySelectorConfig(
+                    domain=SENSOR_DOMAIN,
+                    device_class="power",
+                    multiple=False,
+                )
+            ),
+            vol.Optional(
+                CONF_PHASE_B_SENSOR,
+                default=defaults.get(CONF_PHASE_B_SENSOR),
+            ): selector.EntitySelector(
+                selector.EntitySelectorConfig(
+                    domain=SENSOR_DOMAIN,
+                    device_class="power",
+                    multiple=False,
+                )
+            ),
+            vol.Optional(
+                CONF_PHASE_C_SENSOR,
+                default=defaults.get(CONF_PHASE_C_SENSOR),
+            ): selector.EntitySelector(
+                selector.EntitySelectorConfig(
+                    domain=SENSOR_DOMAIN,
+                    device_class="power",
+                    multiple=False,
+                )
+            ),
+            vol.Optional(
+                CONF_METER_PHASE,
+                default=defaults.get(CONF_METER_PHASE, METER_PHASE_TOTAL),
+            ): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=METER_PHASE_OPTIONS,
+                    translation_key=CONF_METER_PHASE,
+                    mode=selector.SelectSelectorMode.DROPDOWN,
+                )
+            ),
+        }
+    )
 
 
 async def _validate_input(ip: str) -> None:
@@ -187,13 +267,20 @@ class SunlitConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         """
-        Optional step: select a HA sensor entity as grid power source.
+        Optional step: select HA sensor entity/entities as meter source.
 
-        When configured, the integration registers a local HTTP proxy endpoint
-        in HA (Shelly-compatible format) and sets MD/MM on the device so it
-        uses its internal PID controller for regulation.
+        When at least one sensor is configured, the integration registers
+        a local HTTP proxy endpoint in HA (Shelly Pro 3EM-compatible
+        format) and sets MD/MM on the device so it uses its internal PID
+        controller for regulation.
 
-        The sensor must provide grid power in Watts:
+        Single-phase setups only need CONF_GRID_SENSOR (legacy behaviour,
+        unchanged). Multi-Kopfspeicher / 3-phase setups can additionally
+        provide per-phase sensors and select which phase *this* Kopfspeicher
+        instance is wired to via meter_phase — each instance then reads a
+        different field from the same proxy schema.
+
+        All sensors must provide power in Watts:
         - Positive values = export to grid (feed-in)
         - Negative values = import from grid (consumption)
 
@@ -205,31 +292,23 @@ class SunlitConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         """
         if user_input is not None:
-            grid_sensor = user_input.get(CONF_GRID_SENSOR)
-
             return self.async_create_entry(
                 title=self._model,
                 data={
                     "ip": self._ip,
                     "sn": self._sn,
                     "model": self._model,
-                    CONF_GRID_SENSOR: grid_sensor or None,
+                    CONF_GRID_SENSOR: user_input.get(CONF_GRID_SENSOR) or None,
+                    CONF_PHASE_A_SENSOR: user_input.get(CONF_PHASE_A_SENSOR) or None,
+                    CONF_PHASE_B_SENSOR: user_input.get(CONF_PHASE_B_SENSOR) or None,
+                    CONF_PHASE_C_SENSOR: user_input.get(CONF_PHASE_C_SENSOR) or None,
+                    CONF_METER_PHASE: user_input.get(CONF_METER_PHASE, METER_PHASE_TOTAL),
                 },
             )
 
         return self.async_show_form(
             step_id="grid_sensor",
-            data_schema=vol.Schema(
-                {
-                    vol.Optional(CONF_GRID_SENSOR): selector.EntitySelector(
-                        selector.EntitySelectorConfig(
-                            domain=SENSOR_DOMAIN,
-                            device_class="power",
-                            multiple=False,
-                        )
-                    ),
-                }
-            ),
+            data_schema=_meter_schema(),
             description_placeholders={
                 "sn": self._sn,
                 "model": self._model,
@@ -242,11 +321,12 @@ class SunlitConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """
         Handle reconfiguration of an existing SunEnergyXT entry.
 
-        Allows the user to change or remove the grid sensor without
+        Allows the user to change or remove the meter sensors (including
+        per-phase sensors and which phase this instance reads) without
         having to delete and re-add the integration.
 
-        The current grid sensor is pre-filled so the user can see what
-        is configured and change it if needed.
+        Current values are pre-filled so the user can see what is
+        configured and change it if needed.
 
         Args:
             user_input: Dictionary containing user input
@@ -256,33 +336,24 @@ class SunlitConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         """
         entry = self.hass.config_entries.async_get_entry(self.context["entry_id"])
-        current_grid_sensor = entry.data.get(CONF_GRID_SENSOR) if entry else None
+        current = entry.data if entry else {}
 
         if user_input is not None:
-            grid_sensor = user_input.get(CONF_GRID_SENSOR) or None
-
             return self.async_update_reload_and_abort(
                 entry,
-                data_updates={CONF_GRID_SENSOR: grid_sensor},
+                data_updates={
+                    CONF_GRID_SENSOR: user_input.get(CONF_GRID_SENSOR) or None,
+                    CONF_PHASE_A_SENSOR: user_input.get(CONF_PHASE_A_SENSOR) or None,
+                    CONF_PHASE_B_SENSOR: user_input.get(CONF_PHASE_B_SENSOR) or None,
+                    CONF_PHASE_C_SENSOR: user_input.get(CONF_PHASE_C_SENSOR) or None,
+                    CONF_METER_PHASE: user_input.get(CONF_METER_PHASE, METER_PHASE_TOTAL),
+                },
                 reason="reconfigure_successful",
             )
 
         return self.async_show_form(
             step_id="reconfigure",
-            data_schema=vol.Schema(
-                {
-                    vol.Optional(
-                        CONF_GRID_SENSOR,
-                        default=current_grid_sensor,
-                    ): selector.EntitySelector(
-                        selector.EntitySelectorConfig(
-                            domain=SENSOR_DOMAIN,
-                            device_class="power",
-                            multiple=False,
-                        )
-                    ),
-                }
-            ),
+            data_schema=_meter_schema(current),
             description_placeholders={
                 "sn": entry.data.get("sn") if entry else "",
                 "model": entry.data.get("model") if entry else "",
