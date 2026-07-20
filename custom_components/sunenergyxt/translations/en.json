@@ -15,39 +15,23 @@
                 "data": {}
             },
             "grid_sensor": {
-                "title": "Meter Configuration (optional)",
-                "description": "Select Home Assistant sensors that provide the current grid power in Watts.\n\nPositive values = export to grid (feed-in), negative values = import from grid.\n\nFor single-phase setups, the 'Grid Power Sensor (Total)' is enough. For multiple Kopfspeicher on different phases, additionally provide per-phase sensors and select which phase this Kopfspeicher is physically wired to under 'Phase of this Kopfspeicher'.\n\nAll fields are optional. Leave blank to control GS manually via the Number entity.",
+                "title": "Grid Power Sensor (optional)",
+                "description": "Select a Home Assistant sensor that provides the current grid power in Watts.\n\nPositive values = export to grid (feed-in), negative values = import from grid.\n\nWhen configured, the integration will automatically write the GS setpoint whenever the sensor state changes — no manual rest_command needed.\n\nThis field is optional. Leave blank to control GS manually via the Number entity.",
                 "data": {
-                    "grid_sensor_entity_id": "Grid Power Sensor (Total)",
-                    "phase_a_sensor_entity_id": "Phase L1 Sensor",
-                    "phase_b_sensor_entity_id": "Phase L2 Sensor",
-                    "phase_c_sensor_entity_id": "Phase L3 Sensor",
-                    "meter_phase": "Phase of this Kopfspeicher"
+                    "grid_sensor_entity_id": "Grid Power Sensor"
                 },
                 "data_description": {
-                    "grid_sensor_entity_id": "Sensor providing total grid power in Watts (e.g. SolarEdge Meter, Shelly, Tibber Pulse …). Leave empty for manual control.",
-                    "phase_a_sensor_entity_id": "Optional: sensor providing grid power on phase L1 in Watts (e.g. from a Shelly Pro 3EM).",
-                    "phase_b_sensor_entity_id": "Optional: sensor providing grid power on phase L2 in Watts.",
-                    "phase_c_sensor_entity_id": "Optional: sensor providing grid power on phase L3 in Watts.",
-                    "meter_phase": "Which phase this Kopfspeicher should use for regulation. 'Total' matches the previous single-phase behaviour."
+                    "grid_sensor_entity_id": "Sensor providing grid power in Watts (e.g. SolarEdge Meter, Shelly, Tibber Pulse …). Leave empty for manual control."
                 }
             },
             "reconfigure": {
-                "title": "Change Meter Configuration",
-                "description": "Change the Home Assistant sensors used for automatic self-consumption control.\n\nPositive values = export to grid (feed-in), negative values = import from grid.\n\nLeave all fields empty to disable automatic control.",
+                "title": "Change Grid Power Sensor",
+                "description": "Change the Home Assistant sensor used for automatic self-consumption control.\n\nPositive values = export to grid (feed-in), negative values = import from grid.\n\nLeave empty to disable automatic control.",
                 "data": {
-                    "grid_sensor_entity_id": "Grid Power Sensor (Total)",
-                    "phase_a_sensor_entity_id": "Phase L1 Sensor",
-                    "phase_b_sensor_entity_id": "Phase L2 Sensor",
-                    "phase_c_sensor_entity_id": "Phase L3 Sensor",
-                    "meter_phase": "Phase of this Kopfspeicher"
+                    "grid_sensor_entity_id": "Grid Power Sensor"
                 },
                 "data_description": {
-                    "grid_sensor_entity_id": "Sensor providing total grid power in Watts. Leave empty for manual control.",
-                    "phase_a_sensor_entity_id": "Optional: sensor providing grid power on phase L1 in Watts.",
-                    "phase_b_sensor_entity_id": "Optional: sensor providing grid power on phase L2 in Watts.",
-                    "phase_c_sensor_entity_id": "Optional: sensor providing grid power on phase L3 in Watts.",
-                    "meter_phase": "Which phase this Kopfspeicher should use for regulation."
+                    "grid_sensor_entity_id": "Sensor providing grid power in Watts. Leave empty for manual control."
                 }
             }
         },
@@ -68,16 +52,6 @@
             "already_configured": "This device has been added.",
             "unknown": "An unknown error occurred.",
             "reconfigure_successful": "Configuration updated successfully."
-        }
-    },
-    "selector": {
-        "meter_phase": {
-            "options": {
-                "total": "Total",
-                "a": "Phase L1",
-                "b": "Phase L2",
-                "c": "Phase L3"
-            }
         }
     },
     "entity": {
@@ -158,7 +132,7 @@
                 "name": "Today's Off-grid Output Energy"
             },
             "sc": {
-                "name": "System Battery Level"
+                "name": "Battery Level (System)"
             },
             "sc0": {
                 "name": "Head storage"

@@ -15,39 +15,23 @@
                 "data": {}
             },
             "grid_sensor": {
-                "title": "电表配置（可选）",
-                "description": "选择提供当前电网功率（单位：瓦特）的 Home Assistant 传感器。\n\n正值 = 向电网馈电（输出），负值 = 从电网取电（消耗）。\n\n单相系统只需填写「电网功率传感器（总）」。若有多个头部储能单元分布在不同相位，可额外提供各相传感器，并在「本机所属相位」中选择该设备实际接入的相位。\n\n所有字段均为可选项。留空则通过 Number 实体手动控制 GS。",
+                "title": "电网功率传感器（可选）",
+                "description": "选择一个提供当前电网功率（单位：瓦特）的 Home Assistant 传感器。\n\n正值 = 向电网馈电（输出），负值 = 从电网取电（消耗）。\n\n配置后，每当传感器状态变化时，集成将自动写入 GS 设定值，无需手动 rest_command。\n\n此字段为可选项。留空则通过 Number 实体手动控制 GS。",
                 "data": {
-                    "grid_sensor_entity_id": "电网功率传感器（总）",
-                    "phase_a_sensor_entity_id": "L1 相传感器",
-                    "phase_b_sensor_entity_id": "L2 相传感器",
-                    "phase_c_sensor_entity_id": "L3 相传感器",
-                    "meter_phase": "本机所属相位"
+                    "grid_sensor_entity_id": "电网功率传感器"
                 },
                 "data_description": {
-                    "grid_sensor_entity_id": "提供总电网功率（瓦特）的传感器（例如 SolarEdge 电表、Shelly、Tibber Pulse 等）。留空表示手动控制。",
-                    "phase_a_sensor_entity_id": "可选：提供 L1 相电网功率（瓦特）的传感器（例如 Shelly Pro 3EM）。",
-                    "phase_b_sensor_entity_id": "可选：提供 L2 相电网功率（瓦特）的传感器。",
-                    "phase_c_sensor_entity_id": "可选：提供 L3 相电网功率（瓦特）的传感器。",
-                    "meter_phase": "该头部储能单元用于调节的相位。「总」对应此前的单相行为。"
+                    "grid_sensor_entity_id": "提供电网功率（瓦特）的传感器（例如 SolarEdge 电表、Shelly、Tibber Pulse 等）。留空表示手动控制。"
                 }
             },
             "reconfigure": {
-                "title": "更改电表配置",
-                "description": "更改用于自动自耗电控制的 Home Assistant 传感器。\n\n正值 = 向电网馈电，负值 = 从电网取电。\n\n全部留空则禁用自动控制。",
+                "title": "更改电网功率传感器",
+                "description": "更改用于自动自耗电控制的 Home Assistant 传感器。\n\n正值 = 向电网馈电，负值 = 从电网取电。\n\n留空则禁用自动控制。",
                 "data": {
-                    "grid_sensor_entity_id": "电网功率传感器（总）",
-                    "phase_a_sensor_entity_id": "L1 相传感器",
-                    "phase_b_sensor_entity_id": "L2 相传感器",
-                    "phase_c_sensor_entity_id": "L3 相传感器",
-                    "meter_phase": "本机所属相位"
+                    "grid_sensor_entity_id": "电网功率传感器"
                 },
                 "data_description": {
-                    "grid_sensor_entity_id": "提供总电网功率（瓦特）的传感器。留空表示手动控制。",
-                    "phase_a_sensor_entity_id": "可选：提供 L1 相电网功率（瓦特）的传感器。",
-                    "phase_b_sensor_entity_id": "可选：提供 L2 相电网功率（瓦特）的传感器。",
-                    "phase_c_sensor_entity_id": "可选：提供 L3 相电网功率（瓦特）的传感器。",
-                    "meter_phase": "该头部储能单元用于调节的相位。"
+                    "grid_sensor_entity_id": "提供电网功率（瓦特）的传感器。留空表示手动控制。"
                 }
             }
         },
@@ -68,16 +52,6 @@
             "already_configured": "该设备已被添加。",
             "unknown": "发生未知错误。",
             "reconfigure_successful": "配置已成功更新。"
-        }
-    },
-    "selector": {
-        "meter_phase": {
-            "options": {
-                "total": "总",
-                "a": "L1 相",
-                "b": "L2 相",
-                "c": "L3 相"
-            }
         }
     },
     "entity": {
@@ -158,7 +132,7 @@
                 "name": "系统今日逆变离网输出电量"
             },
             "sc": {
-                "name": "系统总电量"
+                "name": "本系统总电量"
             },
             "sc0": {
                 "name": "主机电量"
