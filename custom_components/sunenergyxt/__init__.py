@@ -18,20 +18,28 @@ Modules:
 
 from __future__ import annotations
 
-import json
 import logging
 from http import HTTPStatus
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import aiohttp
 import async_timeout
-from homeassistant.components.http import HomeAssistantView
 from homeassistant.const import Platform
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
 
-from .const import CONF_GRID_SENSOR, DOMAIN
+from .const import CONF_GRID_SENSOR, CONF_METER_PHASE, DOMAIN, METER_PHASE_TOTAL
 from .coordinator import SunlitDataUpdateCoordinator
+from .proxy import (
+    async_disable_mm,
+    async_sync_md,
+    build_md_string,
+    build_meter_config,
+    build_proxy_url,
+    has_any_meter_sensor,
+    md_points_to_proxy,
+    register_proxy_view,
+)
 
 if TYPE_CHECKING:
     from homeassistant.config_entries import ConfigEntry
@@ -46,93 +54,6 @@ PLATFORMS: list[Platform] = [
     Platform.TEXT,
 ]
 CONFIG_SCHEMA = cv.empty_config_schema(domain=DOMAIN)
-
-# Track registered proxy views to avoid duplicate registration
-_PROXY_VIEWS_REGISTERED: set[str] = set()
-
-
-# ---------------------------------------------------------------------------
-# Local HTTP proxy — makes HA look like a Shelly to the device
-# ---------------------------------------------------------------------------
-class SunEnergyXTProxyView(HomeAssistantView):
-    """
-    Local HTTP endpoint that exposes a HA sensor value in Shelly-compatible
-    JSON format. The device polls this endpoint as if it were a Shelly Pro 3EM,
-    enabling it to use its internal PID controller with any HA power sensor.
-
-    Endpoint: GET /api/sunenergyxt_proxy/{entry_id}/status
-    Response:  {"total_power": <value_in_watts>}
-
-    Sign convention (matches device expectation via MD/MM):
-        Positive = export to grid (feed-in)
-        Negative = import from grid (consumption)
-
-    No authentication required — matches Shelly behaviour on local LAN.
-    """
-
-    requires_auth = False
-    url = "/api/sunenergyxt_proxy/{entry_id}/status"
-    name = "api:sunenergyxt_proxy:status"
-
-    def __init__(self, hass: HomeAssistant) -> None:
-        """Initialize the proxy view."""
-        self.hass = hass
-
-    async def get(self, request, entry_id: str):
-        """Handle GET request — return sensor value in Shelly format."""
-        from aiohttp.web import Response
-
-        # Find the entry
-        entry_data = self.hass.data.get(DOMAIN, {}).get(entry_id)
-        if not entry_data:
-            return Response(
-                text=json.dumps({"error": "entry not found"}),
-                status=404,
-                content_type="application/json",
-            )
-
-        grid_sensor = entry_data.get("grid_sensor")
-        if not grid_sensor:
-            return Response(
-                text=json.dumps({"error": "no grid sensor configured"}),
-                status=404,
-                content_type="application/json",
-            )
-
-        # Get current sensor state
-        state = self.hass.states.get(grid_sensor)
-        if state is None or state.state in ("unknown", "unavailable"):
-            return Response(
-                text=json.dumps({"total_power": 0}),
-                content_type="application/json",
-            )
-
-        try:
-            value = float(state.state)
-        except ValueError:
-            value = 0.0
-
-        return Response(
-            text=json.dumps({"total_power": round(value, 1)}),
-            content_type="application/json",
-        )
-
-
-# ---------------------------------------------------------------------------
-# Helper: build MD string and write it to the device
-# ---------------------------------------------------------------------------
-def _build_md_string(proxy_url: str) -> str:
-    """Build the MD JSON string pointing to our local proxy."""
-    md = {
-        "mode": "direct",
-        "direct": {
-            "dat_url": proxy_url,
-        },
-        "dat_str": {
-            "pwr": "total_power",
-        },
-    }
-    return json.dumps(md, separators=(",", ":"))
 
 
 async def _read_device_state(ip: str) -> dict[str, Any]:
@@ -165,77 +86,6 @@ async def _read_device_state(ip: str) -> dict[str, Any]:
     except Exception as err:
         _LOGGER.warning("Error reading device state from %s: %s", ip, err)
         return {"MM": None, "MD": None}
-
-
-def _md_points_to_proxy(current_md: str | None, proxy_url: str) -> bool:
-    """Check whether the device's current MD already points at our proxy."""
-    if not current_md:
-        return False
-    try:
-        parsed = json.loads(current_md)
-    except (json.JSONDecodeError, TypeError):
-        return False
-    return parsed.get("direct", {}).get("dat_url") == proxy_url
-
-
-async def _sync_md(ip: str, md_string: str) -> None:
-    """
-    Ensure the device's MD points at our proxy.
-
-    Only writes MD — never touches MM. MM is exclusively owned by the
-    user-facing switch entity, which already reflects/controls the live
-    device state via the coordinator.
-
-    This is idempotent by design: callers should check
-    `_md_points_to_proxy()` first and only call this when it's False,
-    so we never write on every reload/update if nothing actually changed.
-    """
-    payload = json.dumps({
-        "state": {
-            "LM": 1,   # local mode on — required for the proxy endpoint to be used
-            "MD": md_string,
-        }
-    })
-    try:
-        async with async_timeout.timeout(5), aiohttp.ClientSession() as session:
-            async with session.post(
-                f"http://{ip}/write",
-                data=payload,
-                headers={"Content-Type": "application/json"},
-            ) as resp:
-                if resp.status not in (200, 201, 204):
-                    _LOGGER.warning(
-                        "Failed to write MD to device: HTTP %d", resp.status
-                    )
-                else:
-                    _LOGGER.info(
-                        "✅ Proxy MD written to device (MM left untouched — "
-                        "controlled via switch entity)"
-                    )
-    except Exception as err:
-        _LOGGER.error("Error writing MD to device: %s", err)
-
-
-async def _disable_mm(ip: str) -> None:
-    """
-    Disable self-consumption mode and clear MD on the device.
-
-    Only called when the config entry is actually being removed (see
-    async_remove_entry), never on a plain reload/update, since the
-    proxy URL becomes invalid once the entry is gone.
-    """
-    payload = json.dumps({"state": {"MM": 0, "MD": ""}})
-    try:
-        async with async_timeout.timeout(5), aiohttp.ClientSession() as session:
-            async with session.post(
-                f"http://{ip}/write",
-                data=payload,
-                headers={"Content-Type": "application/json"},
-            ) as resp:
-                if resp.status in (200, 201, 204):
-                    _LOGGER.info("MM disabled on device")
-    except Exception as err:
-        _LOGGER.warning("Could not disable MM on device: %s", err)
 
 
 # ---------------------------------------------------------------------------
@@ -300,7 +150,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     sn = entry.data.get("sn")
     ip = entry.data.get("ip")
     model = entry.data.get("model")
-    grid_sensor = entry.data.get(CONF_GRID_SENSOR)
+    meter_config = build_meter_config(entry.data)
+    meter_phase = entry.data.get(CONF_METER_PHASE, METER_PHASE_TOTAL)
+    # Legacy config entries (pre-multi-phase) only ever set CONF_GRID_SENSOR
+    # and never had a meter_phase concept — CONF_GRID_SENSOR is still what
+    # coordinator/sensor code expects as "the" grid sensor for now.
+    grid_sensor = meter_config.get(CONF_GRID_SENSOR)
 
     try:
         await _test_connection(ip)
@@ -310,22 +165,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         raise ConfigEntryNotReady(msg) from err
 
     # Register the proxy HTTP view (only once per HA instance)
-    if DOMAIN not in _PROXY_VIEWS_REGISTERED:
-        hass.http.register_view(SunEnergyXTProxyView(hass))
-        _PROXY_VIEWS_REGISTERED.add(DOMAIN)
-        _LOGGER.debug("SunEnergyXT proxy view registered")
+    register_proxy_view(hass)
 
-    # Store entry data (proxy view reads grid_sensor from here)
+    # Store entry data (proxy view reads `meter` from here)
     hass.data[DOMAIN][entry.entry_id] = {
         "sn": sn,
         "ip": ip,
         "model": model,
         "grid_sensor": grid_sensor,
+        "meter": meter_config,
+        "meter_phase": meter_phase,
     }
 
-    # If grid sensor configured: ensure the proxy MD is set up.
-    # Read-first, write-only-on-mismatch — MM is never touched here.
-    if grid_sensor:
+    # If at least one meter sensor is configured: ensure the proxy MD is
+    # set up. Read-first, write-only-on-mismatch — MM is never touched here.
+    if has_any_meter_sensor(meter_config):
         try:
             # Get HA's internal URL (how the device reaches HA on the LAN)
             internal_url = hass.config.internal_url
@@ -335,23 +189,24 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         except Exception:
             internal_url = "http://homeassistant.local:8123"
 
-        proxy_url = f"{internal_url.rstrip('/')}/api/sunenergyxt_proxy/{entry.entry_id}/status"
+        proxy_url = build_proxy_url(internal_url, entry.entry_id)
 
         device_state = await _read_device_state(ip)
 
-        if _md_points_to_proxy(device_state.get("MD"), proxy_url):
+        if md_points_to_proxy(device_state.get("MD"), proxy_url, meter_phase):
             _LOGGER.debug(
-                "Device MD already points at our proxy (%s) — skipping write",
+                "Device MD already points at our proxy (%s, phase=%s) — skipping write",
                 proxy_url,
+                meter_phase,
             )
         else:
             _LOGGER.info(
-                "Grid sensor configured: %s — pointing device MD at proxy URL: %s",
-                grid_sensor,
+                "Meter configured (phase=%s) — pointing device MD at proxy URL: %s",
+                meter_phase,
                 proxy_url,
             )
-            md_string = _build_md_string(proxy_url)
-            await _sync_md(ip, md_string)
+            md_string = build_md_string(proxy_url, meter_phase)
+            await async_sync_md(ip, md_string)
 
     coordinator = SunlitDataUpdateCoordinator(
         hass=hass,
@@ -414,7 +269,7 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """
     entry_data = hass.data.get(DOMAIN, {}).get(entry.entry_id, {})
     ip = entry_data.get("ip") or entry.data.get("ip")
-    grid_sensor = entry_data.get("grid_sensor") or entry.data.get(CONF_GRID_SENSOR)
+    meter_config = entry_data.get("meter") or build_meter_config(entry.data)
 
-    if ip and grid_sensor:
-        await _disable_mm(ip)
+    if ip and has_any_meter_sensor(meter_config):
+        await async_disable_mm(ip)
