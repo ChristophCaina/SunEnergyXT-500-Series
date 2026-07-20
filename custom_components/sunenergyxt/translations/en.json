@@ -132,7 +132,7 @@
                 "name": "Today's Off-grid Output Energy"
             },
             "sc": {
-                "name": "System Battery Level"
+                "name": "Battery Level (System)"
             },
             "sc0": {
                 "name": "Head storage"

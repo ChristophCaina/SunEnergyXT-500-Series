@@ -132,7 +132,7 @@
                 "name": "Heutige Off-Grid-Ausgabe"
             },
             "sc": {
-                "name": "System-Speicherlevel"
+                "name": "Batteriestand (Gesamt)"
             },
             "sc0": {
                 "name": "Kopfspeicher"
