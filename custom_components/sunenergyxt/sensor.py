@@ -201,6 +201,14 @@ SENSOR_META: dict[str, dict[str, Any]] = {
         "state_class": SensorStateClass.MEASUREMENT,
         "icon": "mdi:battery-charging",
     },
+  "PD": {
+        "unit": UnitOfEnergy.KILO_WATT_HOUR
+        "scale": 0.001,
+        "precision": 3,
+        "device_class": SensorDeviceClass.ENERGY,
+        "state_class": SensorStateClass.TOTAL_INCREASING,
+        "icon": "mdi:solar-power",
+    },
     "GD1": {
         "unit": UnitOfEnergy.KILO_WATT_HOUR,
         "device_class": SensorDeviceClass.ENERGY,
@@ -455,6 +463,7 @@ async def async_setup_entry(
         "GP",
         "LP",
         "BP",
+        "PD",
         "GD1",
         "GD2",
         "LD",
