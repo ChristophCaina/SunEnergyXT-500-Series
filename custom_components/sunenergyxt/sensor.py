@@ -202,7 +202,7 @@ SENSOR_META: dict[str, dict[str, Any]] = {
         "icon": "mdi:battery-charging",
     },
   "PD": {
-        "unit": UnitOfEnergy.KILO_WATT_HOUR
+        "unit": UnitOfEnergy.KILO_WATT_HOUR,
         "scale": 0.001,
         "precision": 3,
         "device_class": SensorDeviceClass.ENERGY,
