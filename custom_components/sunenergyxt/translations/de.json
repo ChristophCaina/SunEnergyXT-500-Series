@@ -196,6 +196,9 @@
             "bp": {
                 "name": "Batterieleistung"
             },
+            "pd": {
+                "name": "Heutige PV-Erzeugung"
+            },
             "bn": {
                 "name": "Gesamtanzahl Batteriepacks"
             },

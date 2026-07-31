@@ -196,6 +196,9 @@
             "bp": {
                 "name": "Battery Power"
             },
+            "pd": {
+                "name": "Today's PV Generation Energy"
+            },
             "bn": {
                 "name": "Total Battery Pack Count"
             },
