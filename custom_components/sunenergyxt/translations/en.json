@@ -54,6 +54,17 @@
             "reconfigure_successful": "Configuration updated successfully."
         }
     },
+    "options": {
+        "step": {
+            "init": {
+                "title": "SunEnergyXT settings",
+                "description": "Choose how often Home Assistant reads the device. Default: 3 seconds. This is also the update interval for device data used by automations. A longer interval reduces device requests but makes data and control responses slower.",
+                "data": {
+                    "polling_interval": "Polling interval"
+                }
+            }
+        }
+    },
     "entity": {
         "sensor": {
             "ws": {
@@ -248,6 +259,12 @@
             },
             "sa": {
                 "name": "System Max Charge SOC"
+            },
+            "si1": {
+                "name": "Discharge SOC Hysteresis (Default: 5%)"
+            },
+            "sa1": {
+                "name": "Charge SOC Hysteresis (Default: 5%)"
             },
             "so": {
                 "name": "System Load Port Discharge Limit SOC"

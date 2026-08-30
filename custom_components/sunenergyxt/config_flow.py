@@ -3,10 +3,12 @@ Configuration flow for SunEnergyXT 500 Series integration.
 
 This module handles the configuration process for the SunEnergyXT integration,
 including user input validation, device discovery via Zeroconf, device
-information retrieval, and reconfiguration support.
+information retrieval, reconfiguration support, and the options flow
+(polling interval).
 
 Classes:
 - SunlitConfigFlow: Main configuration flow handler for the integration
+- SunlitOptionsFlowHandler: Options flow handler (polling interval)
 - InvalidIP: Exception raised for invalid IP addresses
 - CannotConnect: Exception raised when unable to connect to the device
 - CannotGetSN: Exception raised when unable to retrieve device serial number
@@ -27,6 +29,7 @@ import async_timeout
 import voluptuous as vol
 from homeassistant import config_entries, exceptions
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
+from homeassistant.core import callback
 from homeassistant.data_entry_flow import AbortFlow, FlowResult
 from homeassistant.helpers import selector
 from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
@@ -37,11 +40,15 @@ from .const import (
     CONF_PHASE_A_SENSOR,
     CONF_PHASE_B_SENSOR,
     CONF_PHASE_C_SENSOR,
+    CONF_POLLING_INTERVAL,
+    DEFAULT_POLLING_INTERVAL,
     DOMAIN,
     HOST_PREFIX,
     HOST_SUFFIX,
+    MAX_POLLING_INTERVAL,
     METER_PHASE_OPTIONS,
     METER_PHASE_TOTAL,
+    MIN_POLLING_INTERVAL,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -178,6 +185,7 @@ class SunlitConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     - Optional HA entity as grid power sensor (local HTTP proxy → MM/MD)
     - Configuration entry creation
     - Reconfiguration of grid sensor without reinstalling
+    - Options flow (polling interval)
     - Error handling for various failure scenarios
     """
 
@@ -458,6 +466,62 @@ class SunlitConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 "host": self._discovered_ip,
             },
             errors=errors,
+        )
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(
+        config_entry: config_entries.ConfigEntry,
+    ) -> config_entries.OptionsFlow:
+        """Return the options flow for an existing device (polling interval)."""
+        return SunlitOptionsFlowHandler(config_entry)
+
+
+class SunlitOptionsFlowHandler(config_entries.OptionsFlow):
+    """
+    Handle SunEnergyXT integration options.
+
+    Adopted from upstream SunEnergyXT main: lets the user adjust the
+    device polling interval (default 3s) after setup, without needing to
+    remove and re-add the integration. Changing the option triggers a
+    plain reload via async_reload_entry in __init__.py — MM/MD are never
+    touched by this (see GitHub issue #12).
+    """
+
+    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
+        """Initialize the options flow."""
+        self.options = dict(config_entry.options)
+
+    async def async_step_init(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> FlowResult:
+        """Manage the polling interval option."""
+        if user_input is not None:
+            return self.async_create_entry(title="", data=user_input)
+
+        current_interval = self.options.get(
+            CONF_POLLING_INTERVAL,
+            DEFAULT_POLLING_INTERVAL,
+        )
+        return self.async_show_form(
+            step_id="init",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_POLLING_INTERVAL,
+                        default=current_interval,
+                    ): selector.NumberSelector(
+                        selector.NumberSelectorConfig(
+                            min=MIN_POLLING_INTERVAL,
+                            max=MAX_POLLING_INTERVAL,
+                            step=1,
+                            mode=selector.NumberSelectorMode.BOX,
+                            unit_of_measurement="s",
+                        )
+                    )
+                }
+            ),
         )
 
 
