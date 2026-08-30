@@ -28,7 +28,16 @@ from homeassistant.const import Platform
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import config_validation as cv
 
-from .const import CONF_GRID_SENSOR, CONF_METER_PHASE, DOMAIN, METER_PHASE_TOTAL
+from .const import (
+    CONF_GRID_SENSOR,
+    CONF_METER_PHASE,
+    CONF_POLLING_INTERVAL,
+    DEFAULT_POLLING_INTERVAL,
+    DOMAIN,
+    MAX_POLLING_INTERVAL,
+    METER_PHASE_TOTAL,
+    MIN_POLLING_INTERVAL,
+)
 from .coordinator import SunlitDataUpdateCoordinator
 from .proxy import (
     async_disable_mm,
@@ -54,6 +63,23 @@ PLATFORMS: list[Platform] = [
     Platform.TEXT,
 ]
 CONFIG_SCHEMA = cv.empty_config_schema(domain=DOMAIN)
+
+
+def _resolve_polling_interval(entry: ConfigEntry) -> int:
+    """
+    Resolve the polling interval from the entry's options, clamped to
+    MIN_POLLING_INTERVAL/MAX_POLLING_INTERVAL.
+
+    Adopted from upstream SunEnergyXT main (options flow). Falls back to
+    DEFAULT_POLLING_INTERVAL if unset or invalid.
+    """
+    try:
+        polling_interval = int(
+            entry.options.get(CONF_POLLING_INTERVAL, DEFAULT_POLLING_INTERVAL)
+        )
+    except (TypeError, ValueError):
+        polling_interval = DEFAULT_POLLING_INTERVAL
+    return max(MIN_POLLING_INTERVAL, min(MAX_POLLING_INTERVAL, polling_interval))
 
 
 async def _read_device_state(ip: str) -> dict[str, Any]:
@@ -208,17 +234,26 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             md_string = build_md_string(proxy_url, meter_phase)
             await async_sync_md(ip, md_string)
 
+    polling_interval = _resolve_polling_interval(entry)
+
     coordinator = SunlitDataUpdateCoordinator(
         hass=hass,
         sn=sn,
         ip=ip,
         grid_sensor_entity_id=grid_sensor,
+        polling_interval=polling_interval,
     )
     await coordinator.async_setup()
     await coordinator.async_config_entry_first_refresh()
 
     # Update stored data with coordinator
     hass.data[DOMAIN][entry.entry_id]["coordinator"] = coordinator
+
+    # Reload the entry whenever its options change (e.g. polling interval
+    # adjusted via the options flow) — mirrors upstream behaviour. This is
+    # a plain reload, so it goes through async_unload_entry/async_setup_entry
+    # like any other reload and never touches MM/MD (see GitHub issue #12).
+    entry.async_on_unload(entry.add_update_listener(async_reload_entry))
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
@@ -229,10 +264,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """
     Unload a SunEnergyXT config entry.
 
-    This runs on every reload — including HA restarts and integration
-    updates — not just on removal. It must therefore be a pure platform
-    unload and must NOT touch the device's MM/MD state, otherwise every
-    update/restart would silently flip the device's operating mode.
+    This runs on every reload — including HA restarts, integration
+    updates, and options changes (e.g. polling interval) — not just on
+    removal. It must therefore be a pure platform unload and must NOT
+    touch the device's MM/MD state, otherwise every update/restart/options
+    change would silently flip the device's operating mode.
     (See GitHub issue #12.) Device-side cleanup only happens in
     async_remove_entry, which runs solely on actual removal.
 
@@ -252,15 +288,25 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return unload_ok
 
 
+async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """
+    Reload the integration after an options change (e.g. polling interval).
+
+    Delegates to the standard unload/setup cycle, which is safe with
+    respect to MM/MD (see async_unload_entry docstring).
+    """
+    await hass.config_entries.async_reload(entry.entry_id)
+
+
 async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """
     Handle full removal of a SunEnergyXT config entry.
 
-    Unlike async_unload_entry (called on every reload, including updates
-    and HA restarts), this only runs when the user actually deletes the
-    integration. This is the correct — and only — place to disable MM
-    and clear MD on the device, since the proxy endpoint genuinely stops
-    existing once the entry is gone.
+    Unlike async_unload_entry (called on every reload, including updates,
+    HA restarts, and options changes), this only runs when the user
+    actually deletes the integration. This is the correct — and only —
+    place to disable MM and clear MD on the device, since the proxy
+    endpoint genuinely stops existing once the entry is gone.
 
     Args:
         hass: Home Assistant instance

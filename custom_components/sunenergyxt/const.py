@@ -44,3 +44,11 @@ METER_PHASE_FIELD_MAP = {
     METER_PHASE_B: "b_act_power",
     METER_PHASE_C: "c_act_power",
 }
+
+# Configurable polling interval (adopted from upstream SunEnergyXT
+# integration main, see options flow in config_flow.py). Default matches
+# the interval we previously hard-coded in coordinator.py.
+CONF_POLLING_INTERVAL = "polling_interval"
+DEFAULT_POLLING_INTERVAL = 3
+MIN_POLLING_INTERVAL = 3
+MAX_POLLING_INTERVAL = 60

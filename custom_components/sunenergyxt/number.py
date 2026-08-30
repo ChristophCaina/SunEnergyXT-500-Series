@@ -31,6 +31,11 @@ from .coordinator import SunlitDataUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
+# Device model string as reported by the device's own "DevType" field
+# (see config_flow.py _get_device_info). Confirmed to match the
+# manufacturer's own integration, which uses the space-separated form.
+MODEL_SUNENERGYXT_500 = "SunEnergyXT 500"
+
 NUMBER_META: dict[str, dict[str, Any]] = {
     "GS": {
         "min_value": -2400,
@@ -61,6 +66,24 @@ NUMBER_META: dict[str, dict[str, Any]] = {
         "step": 1,
         "unit": PERCENTAGE,
         "icon": "mdi:battery-high",
+    },
+    # SOC hysteresis (adopted from upstream SunEnergyXT main). Device-side
+    # values controlling how far the SOC must drift past SI/SA before the
+    # device re-triggers charge/discharge — reduces relay/PID chatter
+    # around the SI/SA thresholds. Both default to 5% on the device.
+    "SI1": {
+        "min_value": 0,
+        "max_value": 100,
+        "step": 1,
+        "unit": PERCENTAGE,
+        "icon": "mdi:battery-sync-outline",
+    },
+    "SA1": {
+        "min_value": 0,
+        "max_value": 100,
+        "step": 1,
+        "unit": PERCENTAGE,
+        "icon": "mdi:battery-sync",
     },
     "SO": {
         "min_value": 1,
@@ -139,6 +162,8 @@ async def async_setup_entry(
         "IS",
         "SI",
         "SA",
+        "SI1",
+        "SA1",
         "SO",
         "PT",
         "UG",
@@ -221,10 +246,26 @@ class SunlitNumber(CoordinatorEntity[SunlitDataUpdateCoordinator], NumberEntity)
         if max_value is not None:
             self._attr_native_max_value = max_value
 
-        # Cap GS and IS for SunEnergyXT 500 (non-Pro) model
-        if self._model == "SunEnergyXT500":
-            if self._key in ("GS", "IS", "MG"):
-                self._attr_native_max_value = 800
+        # Cap GS and MG for SunEnergyXT 500 (non-Pro) model at 800W,
+        # matching upstream's own integration.
+        #
+        # Note on IS ("Sollwert max. Wechselrichterleistung"): this field's
+        # name is literally the term used in § 8 Abs. 5a EEG 2023
+        # (Solarpaket I) — "Wechselrichterleistung" is capped at 800 VA
+        # there for a device to qualify as a Steckersolargerät under the
+        # simplified grid-connection process. So IS is, technically, the
+        # legally relevant value for that classification — not GS (which
+        # is only a regulation setpoint, not a capacity ceiling) and not
+        # the DC module power (capped separately at 2000 Wp, and not
+        # user-adjustable here anyway).
+        #
+        # We deliberately do NOT enforce that limit here, matching
+        # upstream: whether/how the device is registered as a
+        # Steckersolargerät (and thus whether the 800 VA limit even
+        # applies) is a legal decision for the operator, not something
+        # this integration should silently enforce in the UI.
+        if self._model == MODEL_SUNENERGYXT_500 and self._key in ("GS", "MG"):
+            self._attr_native_max_value = 800
 
         step = meta.get("step")
         if step is not None:

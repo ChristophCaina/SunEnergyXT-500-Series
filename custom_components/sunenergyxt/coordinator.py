@@ -24,6 +24,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
+from .const import DEFAULT_POLLING_INTERVAL
+
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -42,6 +44,7 @@ class SunlitDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         sn: str,
         ip: str,
         grid_sensor_entity_id: str | None = None,
+        polling_interval: int = DEFAULT_POLLING_INTERVAL,
     ) -> None:
         """
         Initialize the data update coordinator.
@@ -53,6 +56,10 @@ class SunlitDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             grid_sensor_entity_id: Optional HA entity ID of the grid power sensor.
                 When set, the integration uses MD/MM (internal device PID) instead
                 of writing GS directly.
+            polling_interval: Seconds between /read polls. User-configurable via
+                the integration's options flow (see config_flow.py). Defaults to
+                DEFAULT_POLLING_INTERVAL, clamped by the caller against
+                MIN_POLLING_INTERVAL/MAX_POLLING_INTERVAL before being passed in.
 
         """
         self._sn = sn
@@ -63,7 +70,7 @@ class SunlitDataUpdateCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             hass,
             _LOGGER,
             name=f"SunlitMonitor-{sn}",
-            update_interval=timedelta(seconds=3),
+            update_interval=timedelta(seconds=polling_interval),
         )
 
     async def async_setup(self) -> None:
