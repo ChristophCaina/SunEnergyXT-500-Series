@@ -315,5 +315,15 @@
                 "name": "System Time Zone"
             }
         }
+    },
+    "device_automation": {
+        "trigger_type": {
+            "mm_turned_on": "{entity_name} turned on (Local Zero Feed-in mode active)",
+            "mm_turned_off": "{entity_name} turned off (Local Zero Feed-in mode inactive)",
+            "restart_pressed": "{entity_name} pressed (restart triggered)",
+            "status_changed": "{entity_name} status changed",
+            "soc_above": "{entity_name} rose above threshold",
+            "soc_below": "{entity_name} fell below threshold"
+        }
     }
 }

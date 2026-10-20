@@ -315,5 +315,15 @@
                 "name": "系统时区"
             }
         }
+    },
+    "device_automation": {
+        "trigger_type": {
+            "mm_turned_on": "{entity_name} 已开启（本地零馈电模式已启用）",
+            "mm_turned_off": "{entity_name} 已关闭（本地零馈电模式已停用）",
+            "restart_pressed": "{entity_name} 已按下（已触发重启）",
+            "status_changed": "{entity_name} 状态已变化",
+            "soc_above": "{entity_name} 高于阈值",
+            "soc_below": "{entity_name} 低于阈值"
+        }
     }
 }
