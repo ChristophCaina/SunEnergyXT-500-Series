@@ -70,10 +70,30 @@ _TRIGGER_KEY: dict[str, str] = {
 
 TRIGGER_TYPES = set(_TRIGGER_KEY)
 
-TRIGGER_SCHEMA = DEVICE_TRIGGER_BASE_SCHEMA.extend(
-    {
-        vol.Required(CONF_TYPE): vol.In(TRIGGER_TYPES),
-    }
+def _require_threshold(config: dict[str, Any]) -> dict[str, Any]:
+    """Require the threshold field that belongs to the SOC trigger types."""
+    if config[CONF_TYPE] == "soc_above" and "above" not in config:
+        msg = "'above' is required for trigger type 'soc_above'"
+        raise vol.Invalid(msg)
+    if config[CONF_TYPE] == "soc_below" and "below" not in config:
+        msg = "'below' is required for trigger type 'soc_below'"
+        raise vol.Invalid(msg)
+    return config
+
+
+# "above"/"below" are the extra fields the automation editor adds for the
+# SOC triggers (see async_get_trigger_capabilities). They must be part of
+# the schema, otherwise Home Assistant rejects the saved automation with
+# "extra keys not allowed" and disables it at startup.
+TRIGGER_SCHEMA = vol.All(
+    DEVICE_TRIGGER_BASE_SCHEMA.extend(
+        {
+            vol.Required(CONF_TYPE): vol.In(TRIGGER_TYPES),
+            vol.Optional("above"): vol.Coerce(float),
+            vol.Optional("below"): vol.Coerce(float),
+        }
+    ),
+    _require_threshold,
 )
 
 
