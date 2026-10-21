@@ -143,7 +143,7 @@
                 "name": "Heutige Off-Grid-Ausgabe"
             },
             "sc": {
-                "name": "Batteriestand (Gesamt)"
+                "name": "Batteriestand / Speicherlevel (Gesamt)"
             },
             "sc0": {
                 "name": "Kopfspeicher"
@@ -314,6 +314,16 @@
             "tz": {
                 "name": "Systemzeitzone"
             }
+        }
+    },
+    "device_automation": {
+        "trigger_type": {
+            "mm_turned_on": "{entity_name} eingeschaltet (Lokaler Nulleinspeisemodus aktiv)",
+            "mm_turned_off": "{entity_name} ausgeschaltet (Lokaler Nulleinspeisemodus inaktiv)",
+            "restart_pressed": "{entity_name} gedrückt (Neustart ausgelöst)",
+            "status_changed": "{entity_name} Status geändert",
+            "soc_above": "{entity_name} über Schwellwert",
+            "soc_below": "{entity_name} unter Schwellwert"
         }
     }
 }
