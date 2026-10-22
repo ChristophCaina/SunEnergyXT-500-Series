@@ -193,15 +193,6 @@
             "ds": {
                 "name": "Firmware-Version (DC-Einheit)"
             },
-            "eh": {
-                "name": "Hardware-Version (Wi-Fi)"
-            },
-            "ah": {
-                "name": "Hardware-Version (AC-Einheit)"
-            },
-            "dh": {
-                "name": "Hardware-Version (DC-Einheit)"
-            },
             "sn": {
                 "name": "SN des Systemhosts"
             },
