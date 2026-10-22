@@ -334,6 +334,23 @@ SENSOR_META: dict[str, dict[str, Any]] = {
         "entity_category": EntityCategory.DIAGNOSTIC,
         "icon": "mdi:chip",
     },
+    # Hardware revisions of the Wi-Fi / AC / DC units. Not part of the
+    # official API docs; seen in a real /read dump (firmware 1.1.15).
+    "EH": {
+        "enabled_default": False,
+        "entity_category": EntityCategory.DIAGNOSTIC,
+        "icon": "mdi:expansion-card",
+    },
+    "AH": {
+        "enabled_default": False,
+        "entity_category": EntityCategory.DIAGNOSTIC,
+        "icon": "mdi:expansion-card",
+    },
+    "DH": {
+        "enabled_default": False,
+        "entity_category": EntityCategory.DIAGNOSTIC,
+        "icon": "mdi:expansion-card",
+    },
     "SN": {
         "entity_category": EntityCategory.DIAGNOSTIC,
         "icon": "mdi:information-variant-circle",
@@ -484,6 +501,9 @@ async def async_setup_entry(
         "BS5",
         "AS",
         "DS",
+        "EH",
+        "AH",
+        "DH",
         "SN",
         "MS",
         "BN",
@@ -511,6 +531,12 @@ async def async_setup_entry(
         )
 
     async_add_entities(entities, True)  # noqa: FBT003
+
+
+# Keys that some firmware versions never report (documented, but absent in a
+# real /read dump, e.g. BN/WT on firmware 1.1.15). Instead of showing
+# "unknown" forever these sensors become "unavailable" while the key is missing.
+OPTIONAL_KEYS: frozenset[str] = frozenset({"BN", "WT", "EH", "AH", "DH"})
 
 
 class SunlitSensor(
@@ -580,6 +606,15 @@ class SunlitSensor(
 
         if not meta.get("enabled_default", True):
             self._attr_entity_registry_enabled_default = False
+
+    @property
+    def available(self) -> bool:
+        """Return False for optional keys the device does not report."""
+        if not super().available:
+            return False
+        if self._key in OPTIONAL_KEYS:
+            return self.coordinator.data.get(self._key) is not None
+        return True
 
     @property
     def native_value(self) -> Any:
