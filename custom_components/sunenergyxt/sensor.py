@@ -513,6 +513,21 @@ async def async_setup_entry(
     async_add_entities(entities, True)  # noqa: FBT003
 
 
+# Hardware revision keys (not in the official API docs, seen in a real /read
+# dump on firmware 1.1.15) are exposed as an attribute of the matching
+# firmware-version sensor instead of separate entities: they never change.
+HARDWARE_VERSION_KEYS: dict[str, str] = {
+    "ES": "EH",  # Wi-Fi module
+    "AS": "AH",  # AC unit
+    "DS": "DH",  # DC unit
+}
+
+# Keys that some firmware versions never report (documented, but absent in a
+# real /read dump, e.g. BN/WT on firmware 1.1.15). Instead of showing
+# "unknown" forever these sensors become "unavailable" while the key is missing.
+OPTIONAL_KEYS: frozenset[str] = frozenset({"BN", "WT"})
+
+
 class SunlitSensor(
     CoordinatorEntity[SunlitDataUpdateCoordinator],
     SensorEntity,
@@ -582,6 +597,15 @@ class SunlitSensor(
             self._attr_entity_registry_enabled_default = False
 
     @property
+    def available(self) -> bool:
+        """Return False for optional keys the device does not report."""
+        if not super().available:
+            return False
+        if self._key in OPTIONAL_KEYS:
+            return self.coordinator.data.get(self._key) is not None
+        return True
+
+    @property
     def native_value(self) -> Any:
         """
         Get the current value of the sensor entity.
@@ -616,4 +640,9 @@ class SunlitSensor(
         if self.coordinator.last_success_time:
             attrs["last_report_time"] = self.coordinator.last_success_time.isoformat()
         attrs["api_key"] = self._key
+        hw_key = HARDWARE_VERSION_KEYS.get(self._key)
+        if hw_key is not None:
+            hw_version = self.coordinator.data.get(hw_key)
+            if hw_version is not None:
+                attrs["hardware_version"] = hw_version
         return attrs
